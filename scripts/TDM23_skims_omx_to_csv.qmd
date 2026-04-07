@@ -1,0 +1,176 @@
+---
+title: "TDM23_skims_omx_to_csv"
+author: "Conor Gately"
+format: html
+editor: visual
+---
+
+## Process CTPS model skims from TDM23 for UrbanSim input format
+
+# 1 - Setup
+```{r, setup, include=FALSE}
+
+options(scipen=999)
+sun <- function(x){sort(unique(x))}
+
+pacman::p_load(
+  sf,
+  data.table,
+  tidyverse,
+  stringr
+)
+
+#devtools::install_github('gregmacfarlane/omxr')
+library(omxr)
+# devtools::install_github('MAPC/mapcdatakeys')
+library(mapcdatakeys)
+
+# Paths
+if (grepl('VM',Sys.info()[['nodename']])){
+  base <- '//data-sync/Public/DataServices'
+} else {
+  base <- 'S:/Network Shares/K Drive/DataServices'
+}
+
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
+
+scen <- 'Scenario_2'
+
+# skim_path <- file.path(data_path,scen,'Skims')
+skim_path <- 'C:/Users/gately/Desktop/Skims'
+dir.create(skim_path, showWarnings = F)
+
+knitr::opts_knit$set(root.dir = data_path)
+
+```
+
+# 2 - File Paths
+```{r}
+
+if(scen == 'Scenario_1') {
+  base_prefix <- '2019_NoBusLane_HRT-'
+  plan_prefix <- '2050plan_NoBusLane_HRT-'
+}
+
+if(scen == 'Scenario_2') {
+  base_prefix <- 'Base'
+  plan_prefix <- '2050plan'
+}
+
+if(scen == 'Scenario_3') {
+  base_prefix <- ''
+  plan_prefix <- ''
+}
+
+if(scen == 'Scenario_4') {
+  base_prefix <- ''
+  plan_prefix <- ''
+}
+
+skim_path <- 'C:/Users/gately/Desktop/Skims'
+filenames <- c(
+#   file.path(
+#   skim_path,
+#   base_prefix,
+#   c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
+# ),
+file.path(
+  skim_path,
+  plan_prefix,
+  c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
+))
+
+```
+
+
+# 3 - Convert OMX files to CSV
+
+```{r}
+
+
+  for (fname in filenames) {
+    vars <- list_omx(fname)$Matrices$name
+    rows <- list_omx(fname)$Rows
+    cols <- list_omx(fname)$Columns
+    taz_seq <- sort(unique(dx$from_zone_id))
+    dx <- readRDS(paste0(skim_path,'/TDM23_TAZ_OD_Pairs.rds'))
+    for (v in vars) {
+      d1 <- as.data.table(read_omx(fname, v))
+      setnames(d1,paste0('V',taz_seq))
+      d1[, from_zone_id := taz_seq]
+      m1 <-
+        melt.data.table(d1, id.vars = 'from_zone_id', variable.name = 'to_zone_id')
+      setnames(m1, 'value', v)
+      vs <- names(m1)[3]
+      m1[get(vs) < 0, 3] <- 0
+      m1[, to_zone_id := as.integer(gsub('V', '', to_zone_id))]
+      setkey(m1, from_zone_id,to_zone_id)
+      dx <- m1[dx]
+    }
+    
+    dx <- dx[, c('from_zone_id', 'to_zone_id', vars), with = F]
+    dx[is.na(dx)] <- 9999999
+    dx[dx < 0] <- 0
+    fout <- gsub('omx$','csv',fname)
+    fwrite(dx, fout)
+    rm(fout, d1, m1)
+    gc()
+    
+  }
+
+```
+
+# 4 - Format skims for UrbanSim
+
+```{r}
+
+zid <- fread(paste0(skim_path,'/swm_zone_ids.csv'))
+
+# for (yr in c(base_prefix, plan_prefix)) {
+for (yr in c(plan_prefix)) {    
+  
+    # SOV / Passenger vehicle
+    hwy <- fread(file.path(skim_path, yr, 'hwy_am.csv'))
+    hwy[, sov_am_totcost := da_time / 60 * 18.50 + da_toll]
+    hwy <- hwy[, .(from_zone_id, to_zone_id, sov_am_totcost)]
+    setkey(hwy, from_zone_id, to_zone_id)
+    
+    # Walk-access transit
+    wat <- fread(file.path(skim_path, yr, 'tw_am.csv'))
+    wat[, wat_am_totcost := Fare + ivtt / 60 * 18.50 + (iwait + walk + xwait) /
+        60 * 18.5 * 3]
+    wat <- wat[, .(from_zone_id, to_zone_id, wat_am_totcost)]
+    setkey(wat, from_zone_id, to_zone_id)
+    
+    # Drive-access transit
+    dat <- fread(file.path(skim_path, yr, 'ta_am.csv'))
+    dat[, dat_am_totcost := Fare + auto_cost + ivtt / 60 * 18.50 + (iwait + walk + xwait) /
+        60 * 18.5 * 3]
+    dat <- dat[, .(from_zone_id, to_zone_id, dat_am_totcost)]
+    setkey(dat, from_zone_id, to_zone_id)
+    
+    # Merge all modes
+    skim <- hwy[wat][dat]
+    skim[wat_am_totcost == 0, wat_am_totcost := 9999999][dat_am_totcost ==0, dat_am_totcost := 9999999]
+    saveRDS(skim, file.path(skim_path,yr,paste0(yr, '_skims_combined.rds')))
+    
+    # Subset to MAPC zones
+    mapc <- skim[(from_zone_id <= 2667 |
+                  from_zone_id == 3000) & (to_zone_id <= 2667 | to_zone_id == 3000)]
+    mapc[, travel_time := 1]
+    
+    # Subset to SWM zones
+    sid <- skim[, sun(from_zone_id)]
+    drops <- sid[!sid %in% zid$zone_id]
+    swm <- skim[!from_zone_id %in% drops & !to_zone_id %in% drops]
+    swm[,travel_time:=1]
+    
+    # Export
+    fwrite(mapc, file.path(skim_path,yr,
+           paste0('mapcm_skims_', yr, '.csv')))
+    fwrite(swm, file.path(skim_path,yr,
+           paste0('swm_skims_', yr, '.csv')))
+    
+}
+
+```

@@ -1,0 +1,630 @@
+---
+title: "UrbanSim Output Processor"
+author: "Conor Gately"
+format: html
+editor: source
+---
+
+# 1 - Setup: paths and parameters
+
+```{r, setup, include=FALSE}
+
+pacman::p_load(
+  sf,
+  data.table,
+  tidycensus,
+  tidyverse,
+  openxlsx
+)
+
+# devtools::install_github('MAPC/mapcdatakeys')
+library(mapcdatakeys)
+
+# Paths
+if (grepl('VM',Sys.info()[['nodename']])){
+  base <- '//data-sync/Public/DataServices'
+} else {
+  base <- 'S:/Network Shares/K Drive/DataServices'
+}
+
+
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data/UrbanSim')
+
+project_gdb <- file.path(base, 'Projects/Current_Projects/Environment/EEA_MLCA/Data/Spatial/EEA_MLCA.gdb')
+
+proj_gpkg <- file.path(base, 'Projects/Current_Projects/Environment/EEA_MLCA/Data/Spatial/EEA_MLCA.gpkg')
+
+scen = 'Scen_0'
+
+years=c(2019, 2024, 2029, 2034)
+# years=c(2019, 2024, 2029, 2034, 2039, 2044, 2049)
+
+# Municipalities
+munis <- all_muni_data_keys |> 
+  select(muni_id, rpa_acr, mpo) |> 
+  setDT()
+
+# Existing setup (non-scenario)
+MAPCM_run <- 'run_228'
+SWM_run <- 'state_run_135'
+
+# Conservation Test
+
+# years <- c(2011,2012,2013,2014)
+# scen='Conservation_test'
+# MAPCM_run <- 'run_234'
+# scen_gdb <- paste0(base, '/Projects/Current_Projects/Environment/EEA_MLCA/Data/UrbanSim/',scen,'/',scen,'.gdb')
+
+# 2010 Blocks
+blk_2010 <- geog_xw_2010 |> 
+  left_join(munis, by = 'muni_id') |> 
+  select(bl10_id, muni_id, muni_name, rpa_acr, mpo) |> 
+  setDT()
+
+mapc_blks <- blk_2010 |> filter(rpa_acr!='MAPC') |> pull(bl10_id)
+  
+blk10_sf <- mapcdatakeys::block_sf(2010) |> 
+  left_join(munis, by='muni_id')
+
+knitr::opts_knit$set(root.dir = data_path)
+```
+
+# 2 - Census Block Outputs
+
+```{r}
+
+# Base year existing housing unit capacity levels
+
+
+for (yr in c(2019)) {
+  dt.mapc <- fread(paste0(
+    data_path,
+    '/Current/MAPC/results_mapc_',
+    MAPCM_run,
+    '_block_indicators_',yr,'.csv'
+  )) |> select(
+    block_id,
+    residential_unit_capacity,
+    total_residential_units,
+    vacant_residential_units,
+    ru_vacancy_rate,
+    total_households,
+    density_households,
+    unavailable_units,
+    acres
+  ) |>
+    mutate(
+      year = yr,
+      bl10_id = as.character(block_id),
+      residential_unit_capacity = round(residential_unit_capacity),
+      available_unit_capacity = residential_unit_capacity - total_residential_units,
+      cap_pct = round(100 * total_residential_units / residential_unit_capacity, 2)
+    ) |>
+    mutate(cap_pct = case_when(is.infinite(cap_pct) ~ 100, 
+                               is.na(cap_pct) ~ 0,
+                               .default = cap_pct)) |>
+    left_join(blk.sf, by = 'bl10_id')
+
+  # Statewide Model Outputs
+  
+    dt.swm <- fread(paste0(
+    data_path,
+    '/Current/SWM/results_mapc_',
+    SWM_run,
+    '_block_indicators_',yr,'.csv'
+  )) |> select(
+    block_id,
+    residential_unit_capacity,
+    total_residential_units,
+    vacant_residential_units,
+    ru_vacancy_rate,
+    total_households,
+    density_households,
+    unavailable_units,
+    acres
+  ) |>
+    mutate(
+      year = yr,
+      bl10_id = as.character(block_id),
+      residential_unit_capacity = round(residential_unit_capacity),
+      available_unit_capacity = residential_unit_capacity - total_residential_units,
+      cap_pct = round(100 * total_residential_units / residential_unit_capacity, 2)
+    ) |>
+    mutate(cap_pct = case_when(is.infinite(cap_pct) ~ 100, 
+                               is.na(cap_pct) ~ 0,
+                               .default = cap_pct)) |>
+    left_join(blk.sf, by = 'bl10_id') |> 
+    filter(rpa_acr!='MAPC')
+    
+  dt.comb <- rbind(dt.mapc,dt.swm)
+  st_write(dt.comb, 
+           dsn = project_gdb, 
+           layer = paste0('urbansim_current_block_developed_capacities_',yr))
+  
+  st_write(dt.comb, 
+           dsn = gpkg, 
+           layer = paste0('urbansim_current_block_developed_capacities_',yr))
+  
+}
+
+
+```
+
+# 4 - UrbanSim Block Indicator Compile
+
+```{r}
+
+swm.hh <- blk10_sf |> filter(!bl10_id %in% mapc_blks)
+
+swm.blk <- blk10_sf |> filter(!bl10_id %in% mapc_blks)
+
+for (run in SWM_run) {
+  for (yr in years) {
+    dt <- fread(
+      paste0(
+        data_path,
+        '/',
+        scen,
+        '/SWM/results_mapc_',
+        run,
+        '_block_indicators_',
+        yr,
+        '.csv'
+      )
+    ) |> 
+      filter(!block_id %in% mapc_blks) |> 
+      setDT()
+    
+    dt[, year := yr + 1]
+    
+    dt <- dt[, .(
+      year,
+      block_id,
+      muni_id,
+      total_households,
+      hh_owners,
+      hh_renters,
+      total_residential_units,
+      single_fam,
+      multi_fam,
+      residential_unit_capacity,
+      density_residential_units,
+      unavailable_units,
+      vacant_residential_units,
+      ru_vacancy_rate,
+      own_fam,
+      rent_fam,
+      own_single_fam,
+      own_multi_fam,
+      rent_single_fam,
+      rent_multi_fam,
+      sum_with_child,
+      median_income,
+      median_rent,
+      median_value,
+      income_35000l,
+      income_35001_75000,
+      income_75001_125000,
+      income_125001_200000,
+      income_200001p,
+      workers_0,
+      workers_1,
+      workers_2,
+      workers_3,
+      workers_4p,
+      total_jobs,
+      density_jobs,
+      jobs_aggr_sector_1,
+      jobs_aggr_sector_2,
+      jobs_aggr_sector_3,
+      jobs_aggr_sector_4,
+      jobs_aggr_sector_5,
+      jobs_aggr_sector_6,
+      jobs_aggr_sector_7,
+      jobs_aggr_sector_8,
+      jobs_aggr_sector_9,
+      jobs_aggr_sector_10
+    )]
+    
+    setnames(
+      dt,
+      collapse::.c(
+        year,
+        block_id_2010,
+        muni_id,
+        total_households,
+        owner_households,
+        renter_households,
+        total_residential_units,
+        single_fam_units,
+        multi_fam_units,
+        residential_unit_capacity,
+        residential_units_per_acre,
+        unavailable_units,
+        vacant_residential_units,
+        vacancy_rate,
+        owner_units,
+        renter_units,
+        owner_single_fam_units,
+        owner_multi_fam_units,
+        renter_single_fam_units,
+        renter_multi_fam_units,
+        households_with_children,
+        median_household_income,
+        median_household_rent,
+        median_home_value,
+        households_income_under35000,
+        households_income_35001_75000,
+        households_income_75001_125000,
+        households_income_125001_200000,
+        households_income_over200001,
+        households_with_workers_0,
+        households_with_workers_1,
+        households_with_workers_2,
+        households_with_workers_3,
+        households_with_workers_4plus,
+        total_jobs,
+        jobs_per_acre,
+        jobs_aggr_sector_1,
+        jobs_aggr_sector_2,
+        jobs_aggr_sector_3,
+        jobs_aggr_sector_4,
+        jobs_aggr_sector_5,
+        jobs_aggr_sector_6,
+        jobs_aggr_sector_7,
+        jobs_aggr_sector_8,
+        jobs_aggr_sector_9,
+        jobs_aggr_sector_10
+      )
+    )
+    dt[, residential_unit_capacity := round(residential_unit_capacity)]
+    dt[, residential_units_per_acre := round(residential_units_per_acre, 3)]
+    dt[, jobs_per_acre := round(jobs_per_acre, 3)]
+    dt[, median_household_income := round(median_household_income)]
+    dt[, median_household_rent := round(median_household_rent)]
+    dt[, median_home_value := round(median_home_value)]
+    dt[, vacancy_rate := round(vacancy_rate, 2)]
+    setorder(dt, block_id_2010)
+    
+    fwrite(dt,
+           paste0(
+             data_path,
+             '/',
+             scen,
+             '/',
+             scen,
+             '_SWM_block_indicators_',
+             yr + 1,
+             '.csv'
+           ))
+    
+    # Export as spatial layer
+    dt[, bl10_id := as.character(block_id_2010)]
+    dt.sf <- swm.blk |>
+      left_join(dt, by = 'bl10_id') |>
+      select(-muni_id.y, -block_id_2010) |>
+      rename(muni_id = muni_id.x)
+    
+dt.hh <- dt |> 
+  select(bl10_id,total_households) |> 
+  setnames('total_households',paste0('total_households_',yr+1))
+
+swm.hh <- left_join(swm.hh, dt.hh, by='bl10_id')
+
+  }
+}
+
+# Run MAPC 101 data
+
+mapcm.hh <- blk10_sf |> filter(bl10_id %in% mapc_blks)
+
+sub.blk <- blk10_sf |> filter(bl10_id %in% mapc_blks)
+
+
+for (run in MAPCM_run) {
+  for (yr in years) {
+    dt <- fread(
+      paste0(
+        data_path,
+        '/',
+        scen,
+        '/MAPC/results_mapc_',
+        run,
+        '_block_indicators_',
+        yr,
+        '.csv'
+      )
+    )
+    
+    dt[, year := yr + 1]
+    
+    dt <- dt[, .(
+      year,
+      block_id,
+      muni_id,
+      total_households,
+      hh_owners,
+      hh_renters,
+      total_residential_units,
+      single_fam,
+      multi_fam,
+      residential_unit_capacity,
+      density_residential_units,
+      unavailable_units,
+      vacant_residential_units,
+      ru_vacancy_rate,
+      own_fam,
+      rent_fam,
+      own_single_fam,
+      own_multi_fam,
+      rent_single_fam,
+      rent_multi_fam,
+      sum_with_child,
+      median_income,
+      median_rent,
+      median_value,
+      income_35000l,
+      income_35001_75000,
+      income_75001_125000,
+      income_125001_200000,
+      income_200001p,
+      workers_0,
+      workers_1,
+      workers_2,
+      workers_3,
+      workers_4p,
+      total_jobs,
+      density_jobs,
+      jobs_aggr_sector_1,
+      jobs_aggr_sector_2,
+      jobs_aggr_sector_3,
+      jobs_aggr_sector_4,
+      jobs_aggr_sector_5,
+      jobs_aggr_sector_6,
+      jobs_aggr_sector_7,
+      jobs_aggr_sector_8,
+      jobs_aggr_sector_9,
+      jobs_aggr_sector_10
+    )]
+    
+    setnames(
+      dt,
+      collapse::.c(
+        year,
+        block_id_2010,
+        muni_id,
+        total_households,
+        owner_households,
+        renter_households,
+        total_residential_units,
+        single_fam_units,
+        multi_fam_units,
+        residential_unit_capacity,
+        residential_units_per_acre,
+        unavailable_units,
+        vacant_residential_units,
+        vacancy_rate,
+        owner_units,
+        renter_units,
+        owner_single_fam_units,
+        owner_multi_fam_units,
+        renter_single_fam_units,
+        renter_multi_fam_units,
+        households_with_children,
+        median_household_income,
+        median_household_rent,
+        median_home_value,
+        households_income_under35000,
+        households_income_35001_75000,
+        households_income_75001_125000,
+        households_income_125001_200000,
+        households_income_over200001,
+        households_with_workers_0,
+        households_with_workers_1,
+        households_with_workers_2,
+        households_with_workers_3,
+        households_with_workers_4plus,
+        total_jobs,
+        jobs_per_acre,
+        jobs_aggr_sector_1,
+        jobs_aggr_sector_2,
+        jobs_aggr_sector_3,
+        jobs_aggr_sector_4,
+        jobs_aggr_sector_5,
+        jobs_aggr_sector_6,
+        jobs_aggr_sector_7,
+        jobs_aggr_sector_8,
+        jobs_aggr_sector_9,
+        jobs_aggr_sector_10
+      )
+    )
+    dt[, residential_unit_capacity := round(residential_unit_capacity)]
+    dt[, residential_units_per_acre := round(residential_units_per_acre, 3)]
+    dt[, jobs_per_acre := round(jobs_per_acre, 3)]
+    dt[, median_household_income := round(median_household_income)]
+    dt[, median_household_rent := round(median_household_rent)]
+    dt[, median_home_value := round(median_home_value)]
+    dt[, vacancy_rate := round(vacancy_rate, 2)]
+    setorder(dt, block_id_2010)
+    
+    fwrite(dt,
+           paste0(
+             data_path,
+             '/',
+             scen,
+             '/',
+             scen,
+             '_MAPCM_block_indicators_',
+             yr + 1,
+             '.csv'
+           ))
+    
+    # Export as spatial layer
+    dt[, bl10_id := as.character(block_id_2010)]
+    dt.sf <- sub.blk |>
+      left_join(dt, by = 'bl10_id') |>
+      select(-muni_id.y, -block_id_2010) |>
+      rename(muni_id = muni_id.x)
+    
+dt.hh <- dt |> 
+  select(bl10_id,total_households) |> 
+  setnames('total_households',paste0('total_households_',yr+1))
+
+mapcm.hh <- left_join(mapcm.hh, dt.hh, by='bl10_id')
+
+  }
+}
+
+setDT(swm.hh)
+setDT(mapcm.hh)
+
+m2 <- rbind(swm.hh,mapcm.hh)
+m2[is.na(m2)] <- 0
+setorder(m2,bl10_id)
+
+sf.hh <- st_as_sf(m2,crs=26986)
+
+st_write(sf.hh,
+         dsn = project_gdb,
+         layer = paste0(scen, '_households_by_block_5yr_',min(years)+1,'_to_',max(years)+1),
+         append = FALSE)
+
+
+```
+
+# Excel format outputs
+
+```{r}
+# Prep output excel workbook
+wrapStyle <- createStyle(wrapText = TRUE)
+boldStyle <- createStyle(textDecoration = "Bold")
+blk.hh <- createWorkbook()
+
+for (yr in years) {
+    mp <- fread(
+      paste0(
+             data_path,
+             '/',
+             scen,
+             '/',
+             scen,
+             '_MAPCM_block_indicators_',
+             yr + 1,
+             '.csv'
+           ))
+    sw <- fread(
+      paste0(
+             data_path,
+             '/',
+             scen,
+             '/',
+             scen,
+             '_SWM_block_indicators_',
+             yr + 1,
+             '.csv'
+           ))
+    dt <- rbind(mp,sw)
+    
+addWorksheet(blk.hh, sheetName = paste(scen, yr+1, sep = '_'))
+writeData(blk.hh, sheet = paste(scen, yr+1, sep = '_'), x = dt)
+
+}
+
+# Styles for sheet
+setColWidths(
+  blk.hh,
+  cols = 1:ncol(dt),
+  sheet = paste(scen, yr + 1, sep = '_'),
+  widths = "auto"
+)
+addStyle(
+  blk.hh,
+  sheet = paste(scen, yr + 1, sep = '_'),
+  style = boldStyle,
+  cols = 1:ncol(dt),
+  rows = 1,
+  gridExpand = TRUE
+)
+
+# Employment Sector Aggregation Metadata
+meta <- data.table(
+  employment_aggregation = seq(1, 10),
+  sector_description = c(
+    'Construction',
+    'Education and Health Services',
+    'Financial Activities',
+    'Government',
+    'Information',
+    'Leisure and Hospitality',
+    'Manufacturing',
+    'Mining and Logging / Other Services',
+    'Professional and Business Services',
+    'Trade, Transportation, Utilities'
+  )
+)
+# 
+addWorksheet(blk.hh, sheetName = 'employment sector metadata')
+writeData(blk.hh, sheet = 'employment sector metadata', x = meta)
+
+# Styles for sheet
+setColWidths(
+  blk.hh,
+  cols=1:ncol(meta),
+  sheet = 'employment sector metadata',
+  widths = "auto"
+)
+addStyle(
+  blk.hh,
+  sheet = 'employment sector metadata',
+  style = boldStyle,
+  cols=1:ncol(meta),
+  rows = 1,
+  gridExpand = TRUE
+)
+
+saveWorkbook(blk.hh, paste0(data_path,'/',scen,'/',scen, '_block_indicators.xlsx'), overwrite = T)
+
+
+```
+
+
+
+
+# Deprecated
+```{r}
+# # Check raw household totals by segment against control totals
+# ctrl <- fread(paste0(data_path,'/',scen,'/MAPC_Household_Control_Totals_SHoP_Scenario_3_pop_corrected.csv'))
+# 
+# d11 <- fread(paste0(data_path,'/',scen,'/2011/households.csv')) |> 
+#   mutate(
+#     inc_grp=case_when(
+#     income<=35000 ~ 1,
+#     income>35000 & income<=75000 ~ 2,
+#     income>75000 & income<=125000 ~ 3,
+#     income>125000 & income<=225000 ~ 4,
+#     income>225000 ~ 5
+#   ),
+#   age_grp=case_when(
+#     age_of_head>=15 & age_of_head<=35 ~ 1,
+#     age_of_head>35 & age_of_head<=45 ~ 2,
+#     age_of_head>45 & age_of_head<=65 ~ 3,
+#     age_of_head>65 & age_of_head<=75 ~ 4,
+#     age_of_head>75 ~ 5
+#   ),
+#   hhsize = case_when(
+#     persons<=4 ~ persons,
+#     .default=4
+#   ),
+#   child = case_when(
+#     children==0 ~ 0,
+#     .default=1
+#   )
+#   ) |>
+#   setDT()
+# 
+# d11[,.N,.(age_grp,inc_grp,hhsize)]
+# ctrl[year==2011,.N,.(age_of_head_max,income_max,persons_max,children_min)]
+# 
+
+
+```
