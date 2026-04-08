@@ -14,7 +14,8 @@ pacman::p_load(
   data.table,
   tidycensus,
   tidyverse,
-  openxlsx
+  openxlsx,
+  tidygeocoder
 )
 
 # devtools::install_github('MAPC/mapcdatakeys')
@@ -28,11 +29,17 @@ if (grepl('VM',Sys.info()[['nodename']])){
 }
 
 
-data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data/UrbanSim')
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
 
-project_gdb <- file.path(base, 'Projects/Current_Projects/Environment/EEA_MLCA/Data/Spatial/EEA_MLCA.gdb')
+project_gdb <- file.path(data_path, 'Spatial/EEA_MLCA.gdb')
 
-proj_gpkg <- file.path(base, 'Projects/Current_Projects/Environment/EEA_MLCA/Data/Spatial/EEA_MLCA.gpkg')
+proj_gpkg <- file.path(data_path, 'Spatial/EEA_MLCA.gpkg')
+
+urbsim_gpkg <- file.path(data_path, 'Spatial/urbansim_geographies.gpkg')
+
+parcel_mb_gpkg <- file.path(data_path, 'Spatial/parcels_with_massbuilds_projects.gpkg')
+
+massbuilds_gpkg <- file.path(data_path, 'Spatial/all_massbuilds.gpkg')
 
 scen = 'Scen_0'
 
@@ -61,7 +68,7 @@ blk_2010 <- geog_xw_2010 |>
   select(bl10_id, muni_id, muni_name, rpa_acr, mpo) |> 
   setDT()
 
-mapc_blks <- blk_2010 |> filter(rpa_acr!='MAPC') |> pull(bl10_id)
+mapc_blks <- blk_2010 |> filter(rpa_acr=='MAPC') |> pull(bl10_id)
   
 blk10_sf <- mapcdatakeys::block_sf(2010) |> 
   left_join(munis, by='muni_id')
@@ -69,88 +76,267 @@ blk10_sf <- mapcdatakeys::block_sf(2010) |>
 knitr::opts_knit$set(root.dir = data_path)
 ```
 
-# 2 - Census Block Outputs
+# 2 - Massbuilds compile
 
 ```{r}
 
-# Base year existing housing unit capacity levels
+mapc.mb <- fread(paste0(data_path,'/Massbuilds/MAPC_all_devprojects_4_7_2026.csv')) |> 
+  select(block_id,project_id,identification,name,address,start_year,building_type,residential_units,own_units,rent_units,avg_unit_sqft,employment_capacity,status,redevelopment,tags) |> 
+  mutate(model='mapc',
+         identification = case_when(identification==6512 ~ 6609,.default=identification),
+         ID=identification)
+swm.mb <- fread(paste0(data_path,'/Massbuilds/SWM_all_devprojects_4_7_2026.csv')) |> 
+  select(block_id,project_id,identification,name,address,start_year,building_type,residential_units,own_units,rent_units,avg_unit_sqft,employment_capacity,status,redevelopment,tags) |> 
+  filter(!identification %in% mapc.mb$identification & !block_id %in% as.character(mapc_blks)) |> 
+  mutate(model='swm',
+         ID = identification)
+
+mb <- rbind(mapc.mb,swm.mb) |> 
+  mutate(source='urbansim') |> 
+  setDT()
+
+not_incl <- c(
+  6664,
+  7056,
+  7060,
+  7104,
+  7105,
+  7155,
+  6690,
+  7016,
+  7052,
+  7091,
+  7213,
+  7054,
+  7055,
+  7065,
+  7066,
+  7094,
+  7096,
+  6704,
+  7015,
+  7058,
+  7061,
+  7063,
+  7067,
+  7082,
+  7084,
+  7093,
+  6740,
+  6741,
+  6742,
+  6743,
+  6745,
+  6992,
+  6995,
+  7000,
+  7001,
+  7002,
+  7003,
+  7004,
+  7005,
+  7006,
+  7007,
+  7008,
+  7009,
+  7010,
+  7011,
+  7031,
+  7032,
+  7033,
+  7034,
+  7036,
+  7037,
+  7038,
+  7039,
+  7040,
+  7041,
+  7042,
+  7044,
+  7045,
+  7048,
+  7050,
+  7053,
+  7057,
+  7070,
+  7072,
+  7078,
+  7079,
+  7080,
+  7081,
+  7086,
+  7092,
+  7095,
+  7097,
+  7098,
+  7099,
+  7101,
+  7108,
+  7109
+)
+
+mb.shp <- st_read(paste0(data_path,'/Massbuilds/massbuilds-shp-20260407.shp')) %>%
+  st_transform(.,crs=4326) %>%
+  mutate(lon = st_coordinates(.)[,1],
+         lat = st_coordinates(.)[,2]) |> 
+  mutate(source='website') |> 
+  select(ID,lon,lat,source) |> 
+  filter(!ID %in% not_incl) |> 
+  right_join(mb, by='ID') |> 
+  setDT()
 
 
-for (yr in c(2019)) {
-  dt.mapc <- fread(paste0(
-    data_path,
-    '/Current/MAPC/results_mapc_',
-    MAPCM_run,
-    '_block_indicators_',yr,'.csv'
-  )) |> select(
-    block_id,
-    residential_unit_capacity,
-    total_residential_units,
-    vacant_residential_units,
-    ru_vacancy_rate,
-    total_households,
-    density_households,
-    unavailable_units,
-    acres
-  ) |>
-    mutate(
-      year = yr,
-      bl10_id = as.character(block_id),
-      residential_unit_capacity = round(residential_unit_capacity),
-      available_unit_capacity = residential_unit_capacity - total_residential_units,
-      cap_pct = round(100 * total_residential_units / residential_unit_capacity, 2)
-    ) |>
-    mutate(cap_pct = case_when(is.infinite(cap_pct) ~ 100, 
-                               is.na(cap_pct) ~ 0,
-                               .default = cap_pct)) |>
-    left_join(blk.sf, by = 'bl10_id')
+# Geocode entries from NMCOG Scenario Update
 
-  # Statewide Model Outputs
-  
-    dt.swm <- fread(paste0(
-    data_path,
-    '/Current/SWM/results_mapc_',
-    SWM_run,
-    '_block_indicators_',yr,'.csv'
-  )) |> select(
-    block_id,
-    residential_unit_capacity,
-    total_residential_units,
-    vacant_residential_units,
-    ru_vacancy_rate,
-    total_households,
-    density_households,
-    unavailable_units,
-    acres
-  ) |>
-    mutate(
-      year = yr,
-      bl10_id = as.character(block_id),
-      residential_unit_capacity = round(residential_unit_capacity),
-      available_unit_capacity = residential_unit_capacity - total_residential_units,
-      cap_pct = round(100 * total_residential_units / residential_unit_capacity, 2)
-    ) |>
-    mutate(cap_pct = case_when(is.infinite(cap_pct) ~ 100, 
-                               is.na(cap_pct) ~ 0,
-                               .default = cap_pct)) |>
-    left_join(blk.sf, by = 'bl10_id') |> 
-    filter(rpa_acr!='MAPC')
-    
-  dt.comb <- rbind(dt.mapc,dt.swm)
-  st_write(dt.comb, 
-           dsn = project_gdb, 
-           layer = paste0('urbansim_current_block_developed_capacities_',yr))
-  
-  st_write(dt.comb, 
-           dsn = gpkg, 
-           layer = paste0('urbansim_current_block_developed_capacities_',yr))
-  
-}
+nmcog <- mb.shp[grepl('nmcog_addon',tags)] |> pull(name) |> unique()
+nm.xy <- geo_combine(
+      queries = list(
+        list(method = 'arcgis'),
+        list(method = 'osm')),
+      address = nmcog,
+      global_params = list(address = 'address'),
+      lat = lat,
+      lon = lon
+    )
+
+fix <- mb.shp[grepl('nmcog_addon',tags)] |> 
+  select(-lon,-lat) |> 
+  left_join(nm.xy,by=c('name'='address')) |> 
+  select(-query) |> 
+  mutate(identification=99999,
+         ID=99999)
+
+mb.shp <- mb.shp[!grepl('nmcog_addon',tags)] |> 
+  rbind(fix)
+
+# Projects that have been deleted from www.massbuilds.com but not from UrbanSim
+
+to.delete <- mb.shp[is.na(lon) & !is.na(identification), .(project_id,name,identification,model)]
+fwrite(to.delete, paste0(data_path,'/Massbuilds/to_delete_from_urbansim.csv'))
+
+
+# NMCOG projects need to be added to Massbuilds and then their massbuilds IDs transferred into Urbansim
+
+swm_ids <- fread("S:/Network Shares/K Drive/DataServices/Projects/Current_Projects/Projections/Projections_2028/Data/02_UrbanSim/Massbuilds/Massbuilds_to_add_to_Urbancanvas_20260325_clean.csv")
+
+to.add <- mb.shp[is.na(identification) | tags=='nmcog_addon_20260320', .(project_id,name,model,tags,ID)] |> 
+  left_join(swm_ids |> select(identification,full_address), by=c('name'='full_address'), relationship='many-to-many') |> 
+  setDT()
+
+fwrite(to.add, paste0(data_path,'/Massbuilds/to_add_ID_on_urbansim.csv'))
+
+
+# Geocode recent direct-to-urbansim updates of dev projects
+
+swm.geo <- to.add |> filter(is.na(ID)) |> pull(name) |> unique()
+swm.xy <- geo_combine(
+      queries = list(
+        list(method = 'arcgis'),
+        list(method = 'osm')),
+      address = swm.geo,
+      global_params = list(address = 'address'),
+      lat = lat,
+      lon = lon
+    )
+
+fix2 <- mb.shp[name %in% swm.geo] |> 
+  select(-lon,-lat) |> 
+  left_join(swm.xy,by=c('name'='address')) |> 
+  select(-query)
+
+# Final combination for export
+
+mb.cln <- mb.shp[!name %in% c(swm.geo,to.delete$name)] |>
+  rbind(fix2) %>%
+  st_drop_geometry() |>
+  select(-geometry) %>%
+  mutate(
+    lat = case_when(name == 'Pine Oaks Village IV' ~ 41.694054, .default = lat),
+    lon = case_when(name == 'Pine Oaks Village IV' ~ -70.105703, .default = lon),
+    latitude = lat,
+    longitude = lon
+  ) %>%
+  st_as_sf(coords = c('lon', 'lat'), crs = 4326) %>%
+  st_transform(crs = st_crs(blk10_sf)) |>
+  select(-c(source.x, source.y))
+
+st_write(mb.cln, 
+         dsn=project_gdb,
+         layer='All_Massbuilds_Projects_in_UrbanSim_20260407',
+         append=F)
+
+# Visual inspection identified 4 projects with incorrect lat/lon values
+# Edits made in ArcGIS directly (updates to website done afterwards)
+
+mb2 <- st_read(dsn=project_gdb,
+         layer='All_Massbuilds_Projects_in_UrbanSim_20260407_manual_point_fixed')
+
+
+# Join massbuilds points to MBTA 3A zones
+
+chk <- st_read(paste0(data_path,'/Massbuilds/massbuilds-shp-20260407.shp')) |> 
+  select(ID,CREATED_AT,UPDATED_AT) |> 
+  mutate(create_date=lubridate::ymd_hms(CREATED_AT),
+         update_date=lubridate::ymd_hms(UPDATED_AT)
+  ) |> 
+  select(ID,create_date,update_date) |> 
+  st_drop_geometry() |> 
+  setDT()
+
+poly3A <- st_read(dsn=project_gdb,
+                  layer='Districts_3A_20260122_max_dua') |> 
+  st_transform(crs=st_crs(mb2))
+
+# Filter to recent multifamily projects only
+
+mb3a <- st_join(mb2, poly3A, join=st_within, left = F) |>
+  filter(
+    !is.na(max_dua_3A) &
+      start_year >= 2025 &
+      building_type %in% c('Own Multifamily', 'Rent Multifamily')
+    ) |> 
+  left_join(chk, by='ID') |> 
+  filter(tags=='nmcog_addon_20260320' | create_date >= '2022-01-01 00:00:00'| update_date >= '2022-01-01 00:00:00') |> 
+  setDT()
+
+# Combine with list of State Land for Housing projects to make list of projects to exclude from EEA Scenario 1 - "Where We Were"
+
+slh <- mb2 |> filter(grepl('EEA_Scenario_2',tags)) |> setDT()
+scen1_excluded_mb <- rbind(mb3a, slh, fill=T) |> 
+  select(-create_date,-update_date) %>%
+  st_as_sf(.)
+
+st_write(scen1_excluded_mb, 
+         dsn=project_gdb,
+         layer='Final_set_of_massbuilds_projects_excluded_from_Scenario_1',
+         append=F)
+
+fwrite(mb3a,paste0(data_path,'/Massbuilds/Final_massbuilds_3A_projects_to_exclude_from_Scenario_1.csv'))
+
+fwrite(mb2 |> setDT(), paste0(data_path,'/Massbuilds/All_Massbuilds_Projects_in_UrbanSim_20260407_final_version.csv'))
+
+
+# Identify parcels containing Massbuilds project for Harvard Forest to exclude from future conservation areas
+
+all.mb <- st_read(dsn=project_gdb, layer='All_Massbuilds_Projects_in_UrbanSim_20260407_manual_point_fixed')
+
+par <- st_read(dsn = scratch, layer = 'main_L3_TAXPAR_POLY_WITH_COMPRESSED_ASSESSORS_TABLE_20260325_noROW') |> filter(LOC_ID!='F_697064_2863485')
+
+par.near <- st_nearest_feature(all.mb, par)
+par.mb <- par[par.near,]
+par.mb <- par.mb |> 
+  mutate(hasMassBuilds=1)
+
+st_write(par.mb, dsn = parcel_mb_gpkg, layer = 'parcels_with_massbuilds_projects', append=F)
+st_write(all.mb, dsn = massbuilds_gpkg, layer = 'all_massbuilds_projects_in_urbansim_20260407', append=F)
+
+st_write(par.mb, dsn = project_gdb, layer = 'parcels_with_massbuilds_projects', append=F)
+st_write(all.mb, dsn = project_gdb, layer = 'All_Massbuilds_Projects_in_Urbansim_20260407_final_version', append=F)
 
 
 ```
 
-# 4 - UrbanSim Block Indicator Compile
+# 3 - UrbanSim Block Indicator Compile
 
 ```{r}
 
@@ -162,8 +348,7 @@ for (run in SWM_run) {
   for (yr in years) {
     dt <- fread(
       paste0(
-        data_path,
-        '/',
+        data_path,'/UrbanSim/',
         scen,
         '/SWM/results_mapc_',
         run,
@@ -288,8 +473,7 @@ for (run in SWM_run) {
     
     fwrite(dt,
            paste0(
-             data_path,
-             '/',
+             data_path,'/UrbanSim/',
              scen,
              '/',
              scen,
@@ -326,7 +510,7 @@ for (run in MAPCM_run) {
     dt <- fread(
       paste0(
         data_path,
-        '/',
+        '/UrbanSim/',
         scen,
         '/MAPC/results_mapc_',
         run,
@@ -450,7 +634,7 @@ for (run in MAPCM_run) {
     fwrite(dt,
            paste0(
              data_path,
-             '/',
+             '/UrbanSim/',
              scen,
              '/',
              scen,
@@ -482,7 +666,12 @@ m2 <- rbind(swm.hh,mapcm.hh)
 m2[is.na(m2)] <- 0
 setorder(m2,bl10_id)
 
+m2[,blockgroup2010_geoid:=substr(bl10_id,1,12)]
+m2[,tract2010_geoid:=substr(bl10_id,1,11)]
+setnames(m2,'bl10_id','block2010_geoid')
+
 sf.hh <- st_as_sf(m2,crs=26986)
+
 
 st_write(sf.hh,
          dsn = project_gdb,
@@ -490,9 +679,99 @@ st_write(sf.hh,
          append = FALSE)
 
 
+
+
+# Base year existing housing unit capacity levels
+
+
+for (yr in c(2019)) {
+  dt.mapc <- fread(paste0(
+    data_path,
+    '/UrbanSim/Current/MAPC/results_mapc_',
+    MAPCM_run,
+    '_block_indicators_',yr,'.csv'
+  )) |> select(
+    block_id,
+    residential_unit_capacity,
+    total_residential_units,
+    vacant_residential_units,
+    ru_vacancy_rate,
+    total_households,
+    density_households,
+    unavailable_units,
+    acres
+  ) |>
+    mutate(
+      year = yr,
+      bl10_id = as.character(block_id),
+      residential_unit_capacity = round(residential_unit_capacity),
+      available_unit_capacity = residential_unit_capacity - total_residential_units,
+      cap_pct = round(100 * total_residential_units / residential_unit_capacity, 2)
+    ) |>
+    mutate(cap_pct = case_when(is.infinite(cap_pct) ~ 100, 
+                               is.na(cap_pct) ~ 0,
+                               .default = cap_pct)) |>
+    left_join(blk.sf, by = 'bl10_id')
+
+  # Statewide Model Outputs
+  
+    dt.swm <- fread(paste0(
+    data_path,
+    '/UrbanSim/Current/SWM/results_mapc_',
+    SWM_run,
+    '_block_indicators_',yr,'.csv'
+  )) |> select(
+    block_id,
+    residential_unit_capacity,
+    total_residential_units,
+    vacant_residential_units,
+    ru_vacancy_rate,
+    total_households,
+    density_households,
+    unavailable_units,
+    acres
+  ) |>
+    mutate(
+      year = yr,
+      bl10_id = as.character(block_id),
+      residential_unit_capacity = round(residential_unit_capacity),
+      available_unit_capacity = residential_unit_capacity - total_residential_units,
+      cap_pct = round(100 * total_residential_units / residential_unit_capacity, 2)
+    ) |>
+    mutate(cap_pct = case_when(is.infinite(cap_pct) ~ 100, 
+                               is.na(cap_pct) ~ 0,
+                               .default = cap_pct)) |>
+    left_join(blk.sf, by = 'bl10_id') |> 
+    filter(rpa_acr!='MAPC')
+    
+  dt.comb <- rbind(dt.mapc,dt.swm)
+  st_write(dt.comb, 
+           dsn = project_gdb, 
+           layer = paste0('urbansim_current_block_developed_capacities_',yr))
+  
+  st_write(dt.comb, 
+           dsn = gpkg, 
+           layer = paste0('urbansim_current_block_developed_capacities_',yr))
+  
+}
+
+
+# Export block / block group / tract geographies for Harvard Forest
+blk <- st_read(dsn=scratch, layer='Urbansim_households_by_block')
+bg <- st_read(dsn=scratch, layer='Urbansim_households_by_blockgroup')
+tract <- st_read(dsn=scratch, layer='Urbansim_households_by_tract')
+
+st_write(blk, dsn = urbsim_gpkg, layer ='urbansim_households_by_block')
+st_write(bg, dsn = urbsim_gpkg, layer ='urbansim_households_by_blockgroup')
+st_write(tract, dsn = urbsim_gpkg, layer ='urbansim_households_by_tract')
+
+st_write(blk, dsn = project_gdb, layer ='urbansim_households_by_block')
+st_write(bg, dsn = project_gdb, layer ='urbansim_households_by_blockgroup')
+st_write(tract, dsn = project_gdb, layer ='urbansim_households_by_tract')
+
 ```
 
-# Excel format outputs
+# 4 - Excel format template for UrbanSim block-level outputs
 
 ```{r}
 # Prep output excel workbook
@@ -504,7 +783,7 @@ for (yr in years) {
     mp <- fread(
       paste0(
              data_path,
-             '/',
+             '/UrbanSim/',
              scen,
              '/',
              scen,
@@ -514,7 +793,7 @@ for (yr in years) {
            ))
     sw <- fread(
       paste0(
-             data_path,
+             data_path,'/UrbanSim/',
              '/',
              scen,
              '/',
@@ -582,49 +861,8 @@ addStyle(
   gridExpand = TRUE
 )
 
-saveWorkbook(blk.hh, paste0(data_path,'/',scen,'/',scen, '_block_indicators.xlsx'), overwrite = T)
+saveWorkbook(blk.hh, paste0(data_path,'/UrbanSim/',scen,'/',scen, '_block_indicators.xlsx'), overwrite = T)
 
 
 ```
 
-
-
-
-# Deprecated
-```{r}
-# # Check raw household totals by segment against control totals
-# ctrl <- fread(paste0(data_path,'/',scen,'/MAPC_Household_Control_Totals_SHoP_Scenario_3_pop_corrected.csv'))
-# 
-# d11 <- fread(paste0(data_path,'/',scen,'/2011/households.csv')) |> 
-#   mutate(
-#     inc_grp=case_when(
-#     income<=35000 ~ 1,
-#     income>35000 & income<=75000 ~ 2,
-#     income>75000 & income<=125000 ~ 3,
-#     income>125000 & income<=225000 ~ 4,
-#     income>225000 ~ 5
-#   ),
-#   age_grp=case_when(
-#     age_of_head>=15 & age_of_head<=35 ~ 1,
-#     age_of_head>35 & age_of_head<=45 ~ 2,
-#     age_of_head>45 & age_of_head<=65 ~ 3,
-#     age_of_head>65 & age_of_head<=75 ~ 4,
-#     age_of_head>75 ~ 5
-#   ),
-#   hhsize = case_when(
-#     persons<=4 ~ persons,
-#     .default=4
-#   ),
-#   child = case_when(
-#     children==0 ~ 0,
-#     .default=1
-#   )
-#   ) |>
-#   setDT()
-# 
-# d11[,.N,.(age_grp,inc_grp,hhsize)]
-# ctrl[year==2011,.N,.(age_of_head_max,income_max,persons_max,children_min)]
-# 
-
-
-```

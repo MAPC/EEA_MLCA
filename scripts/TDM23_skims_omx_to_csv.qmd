@@ -8,6 +8,7 @@ editor: visual
 ## Process CTPS model skims from TDM23 for UrbanSim input format
 
 # 1 - Setup
+
 ```{r, setup, include=FALSE}
 
 options(scipen=999)
@@ -32,12 +33,12 @@ if (grepl('VM',Sys.info()[['nodename']])){
   base <- 'S:/Network Shares/K Drive/DataServices'
 }
 
-data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data/Task_4')
 
 scen <- 'Scenario_2'
 
-# skim_path <- file.path(data_path,scen,'Skims')
-skim_path <- 'C:/Users/gately/Desktop/Skims'
+skim_path <- file.path(data_path,scen,'Skims')
+# skim_path <- 'C:/Users/gately/Desktop/Skims'
 dir.create(skim_path, showWarnings = F)
 
 knitr::opts_knit$set(root.dir = data_path)
@@ -45,6 +46,7 @@ knitr::opts_knit$set(root.dir = data_path)
 ```
 
 # 2 - File Paths
+
 ```{r}
 
 if(scen == 'Scenario_1') {
@@ -67,21 +69,20 @@ if(scen == 'Scenario_4') {
   plan_prefix <- ''
 }
 
-skim_path <- 'C:/Users/gately/Desktop/Skims'
 filenames <- c(
-#   file.path(
-#   skim_path,
-#   base_prefix,
-#   c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
-# ),
-file.path(
+  file.path(
   skim_path,
-  plan_prefix,
-  c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
-))
+  base_prefix,
+  c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx'))
+# ,
+# file.path(
+#   skim_path,
+#   plan_prefix,
+#   c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
+# )
+)
 
 ```
-
 
 # 3 - Convert OMX files to CSV
 
@@ -127,7 +128,7 @@ file.path(
 zid <- fread(paste0(skim_path,'/swm_zone_ids.csv'))
 
 # for (yr in c(base_prefix, plan_prefix)) {
-for (yr in c(plan_prefix)) {    
+for (yr in c(base_prefix)) {    
   
     # SOV / Passenger vehicle
     hwy <- fread(file.path(skim_path, yr, 'hwy_am.csv'))
