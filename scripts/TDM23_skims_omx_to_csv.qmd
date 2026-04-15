@@ -56,6 +56,7 @@ if(scen == 'Scenario_1') {
 
 if(scen == 'Scenario_2') {
   base_prefix <- 'Base'
+  int_prefix <- '2024_Draft20260414'
   plan_prefix <- '2050plan'
 }
 
@@ -70,9 +71,14 @@ if(scen == 'Scenario_4') {
 }
 
 filenames <- c(
-  file.path(
+  # file.path(
+  # skim_path,
+  # base_prefix,
+  # c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx'))
+# ,
+file.path(
   skim_path,
-  base_prefix,
+  int_prefix,
   c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx'))
 # ,
 # file.path(
@@ -88,6 +94,7 @@ filenames <- c(
 
 ```{r}
 
+dx <- readRDS(paste0(skim_path,'/TDM23_TAZ_OD_Pairs.rds'))
 
   for (fname in filenames) {
     vars <- list_omx(fname)$Matrices$name
@@ -128,7 +135,7 @@ filenames <- c(
 zid <- fread(paste0(skim_path,'/swm_zone_ids.csv'))
 
 # for (yr in c(base_prefix, plan_prefix)) {
-for (yr in c(base_prefix)) {    
+for (yr in c(plan_prefix)) {    
   
     # SOV / Passenger vehicle
     hwy <- fread(file.path(skim_path, yr, 'hwy_am.csv'))

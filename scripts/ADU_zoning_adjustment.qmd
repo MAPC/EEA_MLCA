@@ -1,0 +1,77 @@
+---
+title: "ADU Zoning Adjustment"
+author: "Conor Gately"
+format: html
+editor: source
+---
+
+# 1 - Setup: paths and parameters
+
+```{r, setup, include=FALSE}
+
+pacman::p_load(
+  sf,
+  data.table,
+  tidycensus,
+  tidyverse,
+  openxlsx,
+  tidygeocoder
+)
+
+# devtools::install_github('MAPC/mapcdatakeys')
+library(mapcdatakeys)
+
+# Paths
+if (grepl('VM',Sys.info()[['nodename']])){
+  base <- '//data-sync/Public/DataServices'
+} else {
+  base <- 'S:/Network Shares/K Drive/DataServices'
+}
+
+
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
+
+scen = 'Scenario_2'
+
+sp_path <- paste0(data_path,'/Task_4/',scen,'/Zoning/Spatial/')
+tab_path <- paste0(data_path,'/Task_4/',scen,'/Zoning/Tabular/')
+
+project_gdb <- paste0(sp_path, scen, '.gdb')
+
+# Municipalities
+munis <- all_muni_data_keys |> 
+  select(muni_id, muni_name, rpa_acr, mpo) |> 
+  setDT()
+
+
+knitr::opts_knit$set(root.dir = data_path)
+```
+
+# 2 - Adjust parcels in sewer service areas to have one additional unit per lot (1-3 unit lots only)
+
+```{r}
+
+par <- fread(paste0(tab_path, 'parcel_sewer_service_area_developable.csv')) |> 
+  filter(POLY_TYPE %in% c('TAX','FEE')) |> 
+  mutate(
+    max_lot_units = floor(max_dua * lot_acres)
+  ) |> 
+  filter(max_lot_units %in% 1:3) |> 
+  mutate(max_units_with_adu = max_lot_units + 1,
+         new_dua = round(max_units_with_adu / lot_acres)
+  ) |> 
+  select(LOC_ID, new_dua)
+
+fwrite(par, paste0(sp_path, 'parcel_adu_adjusted_dua.csv'))
+
+par.poly <- st_read(dsn=paste0(sp_path,scen,'.gdb'),layer='parcel_DB_statewide_zoning_join_largest_overlap')
+
+```
+
+# 3 - Revise Cambridge zoning to upzone for 4/6 story by right
+
+```{r}
+
+
+
+```
