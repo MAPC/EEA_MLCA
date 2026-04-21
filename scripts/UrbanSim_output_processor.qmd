@@ -15,7 +15,8 @@ pacman::p_load(
   tidycensus,
   tidyverse,
   openxlsx,
-  tidygeocoder
+  tidygeocoder,
+  lehdr
 )
 
 # devtools::install_github('MAPC/mapcdatakeys')
@@ -43,7 +44,7 @@ massbuilds_gpkg <- file.path(data_path, 'Spatial/all_massbuilds.gpkg')
 
 scen = 'Scen_0'
 
-years=c(2019, 2024, 2029, 2034)
+years=c(2010, 2019, 2024, 2029, 2034)
 # years=c(2019, 2024, 2029, 2034, 2039, 2044, 2049)
 
 # Municipalities
@@ -678,7 +679,15 @@ st_write(sf.hh,
          layer = paste0(scen, '_households_by_block_5yr_',min(years)+1,'_to_',max(years)+1),
          append = FALSE)
 
+# Add 2000 and 2010 tract level households and employment
+var00 <- load_variables(2000,'sf1')
 
+hh00 <- get_decennial(
+  state='MA',
+  geography='tract',
+  year=2000,
+  table='P15'
+)
 
 
 # Base year existing housing unit capacity levels

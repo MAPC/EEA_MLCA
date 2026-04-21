@@ -1,0 +1,866 @@
+---
+title: "ADU Zoning Adjustment"
+author: "Conor Gately"
+format: html
+editor: source
+---
+
+# 1 - Setup: paths and parameters
+
+```{r, setup, include=FALSE}
+
+pacman::p_load(
+  sf,
+  data.table,
+  tidycensus,
+  tidyverse,
+  openxlsx,
+  tidygeocoder,
+  terra,
+  reticulate
+)
+
+
+# devtools::install_github('MAPC/mapcdatakeys')
+library(mapcdatakeys)
+
+
+reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+
+# Paths
+if (grepl('VM',Sys.info()[['nodename']])){
+  base <- '//data-sync/Public/DataServices'
+} else {
+  base <- 'S:/Network Shares/K Drive/DataServices'
+}
+
+
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
+
+scen1_sp_path = paste0(data_path,'/Task_4/Scenario_1/Zoning/Spatial/')
+scen1_gdb = paste0(scen1_sp_path, 'Scenario_1.gdb')
+scen2_sp_path = paste0(data_path,'/Task_4/Scenario_2/Zoning/Spatial/')
+scen2_gdb = paste0(scen2_sp_path, 'Scenario_2.gdb')
+scen3_sp_path = paste0(data_path,'/Task_4/Scenario_3/Zoning/Spatial/')
+scen3_gdb = paste0(scen3_sp_path, 'Scenario_3.gdb')
+scen4_sp_path = paste0(data_path,'/Task_4/Scenario_4/Zoning/Spatial/')
+scen4_gdb = paste0(scen4_sp_path, 'Scenario_4.gdb')
+
+# sp_path <- paste0(data_path,'/Spatial/')
+# tab_path <- paste0(data_path,'/Tabular/')
+# project_gdb <- paste0(sp_path, 'EEA_MLCA.gdb')
+
+tab_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
+sp_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
+project_gdb <- paste0(sp_path, 'EEA_MLCA_constraints.gdb')
+
+
+knitr::opts_knit$set(root.dir = data_path)
+```
+
+```{r}
+surf2poly = function(obj) {
+  
+  out_geom_txt = obj |> 
+    sf::st_geometry() |> 
+    sf::st_as_text() |> 
+    gsub(pattern = "MULTISURFACE (", replacement = '', fixed = TRUE) |> 
+    gsub(pattern = "COMPOUNDCURVE (", replacement = '', fixed = TRUE) |> 
+    gsub(pattern = "CURVEPOLYGON (", replacement = '', fixed = TRUE)
+  
+  out = obj |> 
+    sf::st_set_geometry(
+      value = sf::st_as_sfc(
+        out_geom_txt, 
+        crs = sf::st_crs(obj)
+      )
+    )
+  
+  idx = which(sf::st_geometry_type(out) == "LINESTRING")
+  
+  out_greenlight = out[-idx, ]
+  out_redlight = out |> 
+    dplyr::slice(idx) |> 
+    sf::st_cast(to = "POLYGON") |> 
+    sf::st_cast(to = "MULTIPOLYGON")
+  
+  out = rbind(out_greenlight, out_redlight) |> 
+    sf::st_cast("MULTIPOLYGON") |> 
+    sf::st_make_valid()
+  
+  return(out)
+  
+}
+```
+# 2 - Adjust parcels in sewer service areas to have one additional unit per lot (1-3 unit lots only)
+
+# Arcpy
+```{python}
+
+import arcpy
+import os
+from arcpy import env
+
+env.workspace = r.project_gdb
+env.overwriteOutput = True
+
+# Subset to MRWA municipalities that offer sewer service
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="MWRASERVICE_POLY",
+    selection_type="NEW_SELECTION",
+    where_clause="CODE IN ('S', 'WS')",
+    invert_where_clause=None
+)
+arcpy.conversion.ExportFeatures(
+    in_features="MWRASERVICE_POLY",
+    out_features="MWRA_munis_with_sewer"
+)
+
+# Merge Public and Non-Public Owned Services Layers
+arcpy.management.Merge(
+    inputs="SEWER_SERVICE_AREA_POTW_POLY;SEWER_SERVICE_AREA_NONPOTW_POLY",
+    output="SEWER_SERVICE_AREA_Merge",
+    field_mappings=None,
+    add_source="NO_SOURCE_INFO",
+    field_match_mode="AUTOMATIC"
+)
+
+# Drop Unconfirmed services smaller than 250 acres
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="SEWER_SERVICE_AREA_Merge",
+    selection_type="NEW_SELECTION",
+    where_clause="SERVCECONF = 'Unconfirmed' And Shape_Area < 1000000",
+    invert_where_clause="INVERT"
+)
+arcpy.conversion.ExportFeatures(
+    in_features="SEWER_SERVICE_AREA_Merge",
+    out_features="SEWER_SERVICE_AREA_Merge_250acrePlus"
+)
+
+# Merge MRWA and non-MRWA service areas
+arcpy.analysis.Erase(
+    in_features="SEWER_SERVICE_AREA_Merge_250acrePlus",
+    erase_features="MWRA_munis_with_sewer",
+    out_feature_class="SEWER_SERVICE_AREA_250acre_erase_MWRA",
+    cluster_tolerance=None
+)
+
+arcpy.management.Merge(
+    inputs="SEWER_SERVICE_AREA_250acre_erase_MWRA;MWRA_munis_with_sewer",
+    output="All_sewer_service_areas_merged",
+    field_mappings=None,
+    add_source="NO_SOURCE_INFO",
+    field_match_mode="AUTOMATIC"
+)
+
+# Clip parcel data to merged sewer service areas
+arcpy.analysis.PairwiseClip(
+    in_features="parcel_DB_statewide_zoning_join_largest_overlap",
+    clip_features="All_sewer_service_areas_merged",
+    out_feature_class="parcel_sewer_service_area_clip",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+# Erase non-developable land portion of parcels
+arcpy.analysis.PairwiseErase(
+    in_features="parcel_sewer_service_area_clip",
+    erase_features="main_state_wide_urbansim_undevelopable_land_constraint",
+    out_feature_class="parcel_sewer_service_area_constraint_erase",
+    cluster_tolerance=None
+)
+
+arcpy.management.MakeFeatureLayer("parcel_sewer_service_area_constraint_erase", "parcel_sewer_service_area_constraint_erase_layer")
+
+# Filter to only parcels zoned as single-family, two-family, or three-family residential
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="parcel_sewer_service_area_constraint_erase_layer",
+    selection_type="SUBSET_SELECTION",
+    where_clause="MIN_LUCA IS NOT NULL And MAX_LUCA IS NOT NULL And MIN_LUCA IN ('101', '103', '104') And MAX_LUCA IN ('101', '103', '104') And POLY_TYPE IN ('FEE', 'TAX')",
+    invert_where_clause=None
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="parcel_sewer_service_area_constraint_erase_layer",
+    out_features="parcel_sewer_service_area_developable"
+)
+
+# Recalculate lot size for developable portion of parcel
+arcpy.management.CalculateGeometryAttributes(
+    in_features="parcel_sewer_service_area_developable",
+    geometry_property="lot_acres AREA",
+    length_unit="",
+    area_unit="ACRES_US",
+    coordinate_system=None,
+    coordinate_format="SAME_AS_INPUT"
+)
+
+# Calculate maximum units permitted on lot based on existing zoning dwelling units per acre maximum
+arcpy.management.AddField(
+    in_table="parcel_sewer_service_area_developable",
+    field_name="max_lot_units",
+    field_type="LONG",
+    field_precision=None,
+    field_scale=None,
+    field_length=None,
+    field_alias="",
+    field_is_nullable="NULLABLE",
+    field_is_required="NON_REQUIRED",
+    field_domain=""
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_sewer_service_area_developable",
+    field="max_lot_units",
+    expression="Round($feature.max_dua * $feature.lot_acres)",
+    expression_type="ARCADE",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="parcel_sewer_service_area_developable",
+    selection_type="NEW_SELECTION",
+    where_clause="max_lot_units IN (1, 2, 3)",
+    invert_where_clause=None
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_sewer_service_area_developable",
+    field="max_dua",
+    expression="Round(($feature.max_lot_units + 1) / $feature.lot_acres), 1",
+    expression_type="ARCADE",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_sewer_service_area_developable",
+    field="max_far",
+    expression="Round($feature.max_far, 2)",
+    expression_type="ARCADE",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_sewer_service_area_developable",
+    field="zoning",
+    expression="'adu_by_right_with_sewer'",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+keep_fields = ["LOC_ID","max_dua","max_far","zoning","Shape"] # Always keep geometry
+
+# Create FieldMappings object
+field_mappings = arcpy.FieldMappings()
+field_mappings.addTable("parcel_sewer_service_area_developable")
+
+# Identify and remove fields NOT in your 'keep' list
+for field in field_mappings.fields:
+    if field.name not in keep_fields:
+        field_mappings.removeFieldMap(field_mappings.findFieldMapIndex(field.name))
+
+arcpy.conversion.ExportFeatures(
+    in_features="parcel_sewer_service_area_developable",
+    out_features="ADU_adjusted_dua",
+    field_mapping=field_mappings
+)
+
+
+arcpy.analysis.PairwiseDissolve(
+    in_features="ADU_adjusted_dua",
+    out_feature_class="ADU_adjusted_dua_dissolve",
+    dissolve_field="max_dua;max_far;zoning",
+    statistics_fields=None,
+    multi_part="MULTI_PART",
+    concatenation_separator=""
+)
+
+```
+
+# 3 - Revise Cambridge zoning to upzone for 4/6 story by right
+
+We selected all parcels in the MassGIS L3 Parcel Database that overlapped with Cambridge Residential Zone C-1 polygons, and filtered out any parcels that represented rights-of-way or other non-developable land.
+
+The new Cambridge zoning requires setbacks of 10-feet at the front of the lot, and 5-feet on all other sides. As we could not easily identify the 'front' of every lot in the parcel database, we chose to apply uniform setbacks of 10 feet inwards from all boundary edges of the parcel polygons, by applying a spatial buffer of radius = -10.
+
+<png of screenshot of setback polygons vs parcel edges>
+
+Using the setback polygon as the 'buildable area' for the lot, we calculate the number of residential units that would fit on each floor of a 4-story or 6-story building. We use an "efficiency" fraction of 85% as the ratio of livable square footage to gross square footage (ref: <https://www.bostonindicators.org/-/media/indicators/boston-indicators-reports/report-files/20241022_ss-report_digital.pdf>). For an average unit size of 1,000 square feet the calculation is:
+
+`Buildable area * 0.85 / 1000 = Units per floor`
+
+We round this number down to the nearest integer to be conservative with our unit capacity estimates.
+
+For parcels with a lot size smaller than 5,000 square feet, only the 4-story estimate of maximum units is used:
+
+`Max_units = Units per floor * 4`
+
+For parcels with lot size larger than 5,000 square feet, Cambridge zoning permits building to 6 stories by-right, provided that at least 20% of the units are affordable/deed-restricted.
+
+Data from Massbuilds and from this Pioneer Institute report <https://pioneerinstitute.org/wp-content/uploads/Inclusionary-Zoning-White-Paper-03062025.pdf> indicate that since the beginning of Inclusionary zoning requirements in Cambridge in 1998, roughly 12-15% of units built have fallen under the inclusionary zoning requirements for affordable units.
+
+We therefore selected a sample of the qualifying parcels such that their total unit capacity under the 6-story height limit was equal to roughly 15% of the total potential units that could be developed if all \>5000 square foot parcels were (re)developed to the 6-story by-right height limit.
+
+To do this, we randomly sampled the qualifying large parcels, calculating the cumulative unit sums if they were developed to 6 stories by-right, until we reached a total that was \~15% (15,588) of the total potential unit sum (103,918) if all qualifying parcels were thus developed.
+
+The selected parcels were then rezoned according to a 6-story height limit by-right, while the remaining large parcels were rezoned at the 4-story height limit by-right.
+
+# Arcpy
+```{python}
+
+import arcpy
+import os
+from arcpy import env
+
+env.workspace = r.project_gdb
+env.overwriteOutput = True
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="CDD_ZoningDistricts",
+    selection_type="NEW_SELECTION",
+    where_clause="ZONE_TYPE = 'C-1'",
+    invert_where_clause=None
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="CDD_ZoningDistricts",
+    out_features="Cambridge_C1_districts"
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="parcel_DB_statewide_zoning_join_largest_overlap",
+    clip_features="Cambridge_C1_districts",
+    out_feature_class="parcel_DB_Cambridge_C1_clip",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+arcpy.analysis.PairwiseErase(
+    in_features="parcel_DB_Cambridge_C1_clip",
+    erase_features="main_state_wide_urbansim_undevelopable_land_constraint",
+    out_feature_class="parcel_Cambridge_C1_developable",
+    cluster_tolerance=None
+)
+
+arcpy.management.CalculateGeometryAttributes(
+    in_features="parcel_Cambridge_C1_developable",
+    geometry_property="lot_acres AREA",
+    length_unit="",
+    area_unit="ACRES_US",
+    coordinate_system=None,
+    coordinate_format="SAME_AS_INPUT"
+)
+
+arcpy.management.CalculateGeometryAttributes(
+    in_features="parcel_Cambridge_C1_developable",
+    geometry_property="lot_sqft AREA",
+    length_unit="",
+    area_unit="SQUARE_FEET_US",
+    coordinate_system=None,
+    coordinate_format="SAME_AS_INPUT"
+)
+
+# arcpy.management.MakeFeatureLayer("parcel_Cambridge_C1_developable", "parcel_Cambridge_C1_developable")
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="parcel_Cambridge_C1_developable",
+    selection_type="NEW_SELECTION",
+    where_clause="POLY_TYPE NOT IN ('FEE', 'TAX')",
+    invert_where_clause=None
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_Cambridge_C1_developable",
+    field="max_dua",
+    expression="0",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+arcpy.management.CalculateField(
+    in_table="parcel_Cambridge_C1_developable",
+    field="max_far",
+    expression="0",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_Cambridge_C1_developable",
+    field="max_lot_units",
+    expression="0",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="parcel_Cambridge_C1_developable",
+    selection_type="NEW_SELECTION",
+    where_clause="POLY_TYPE IN ('FEE', 'TAX')",
+    invert_where_clause=None
+)
+
+arcpy.analysis.PairwiseBuffer(
+    in_features="parcel_Cambridge_C1_developable",
+    out_feature_class="Cambridge_C1_parcels_10ft_setback_poly",
+    buffer_distance_or_field="-10 Feet",
+    dissolve_option="NONE",
+    dissolve_field=None,
+    method="PLANAR",
+    max_deviation="0 Meters"
+)
+
+arcpy.management.CalculateGeometryAttributes(
+    in_features="Cambridge_C1_parcels_10ft_setback_poly",
+    geometry_property="bldg_footprint_sqft AREA",
+    length_unit="",
+    area_unit="SQUARE_FEET_US",
+    coordinate_system=None,
+    coordinate_format="SAME_AS_INPUT"
+)
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="Cambridge_C1_parcels_10ft_setback_poly",
+    selection_type="NEW_SELECTION",
+    where_clause="lot_sqft >= 5000",
+    invert_where_clause=None
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="Cambridge_C1_parcels_10ft_setback_poly",
+    out_features="Cambridge_C1_parcels_5000sqft"
+)
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="Cambridge_C1_parcels_10ft_setback_poly",
+    selection_type="NEW_SELECTION",
+    where_clause="lot_sqft < 5000 And bldg_footprint_sqft >= 1000",
+    invert_where_clause=None
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="Cambridge_C1_parcels_10ft_setback_poly",
+    out_features="Cambridge_C1_parcels_4story"
+)
+
+arcpy.management.SelectLayerByAttribute(
+    in_layer_or_view="parcel_DB_statewide_zoning_join_largest_overlap",
+    selection_type="NEW_SELECTION",
+    where_clause="POLY_TYPE NOT IN ('FEE', 'TAX')",
+    invert_where_clause=None
+)
+
+keep_fields = ["OBJECTID","geom","max_dua","max_far","zoning"] # Always keep geometry
+
+# Create FieldMappings object
+field_mappings = arcpy.FieldMappings()
+field_mappings.addTable("parcel_DB_statewide_zoning_join_largest_overlap")
+
+# Identify and remove fields NOT in your 'keep' list
+for field in field_mappings.fields:
+    if field.name not in keep_fields:
+        field_mappings.removeFieldMap(field_mappings.findFieldMapIndex(field.name))
+
+arcpy.conversion.ExportFeatures(
+    in_features="parcel_DB_statewide_zoning_join_largest_overlap",
+    out_features="parcel_DB_ROW",
+    field_mapping=field_mappings
+)
+
+arcpy.management.CalculateField(
+    in_table="parcel_DB_ROW",
+    field="max_dua",
+    expression="0",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+arcpy.management.CalculateField(
+    in_table="parcel_DB_ROW",
+    field="max_far",
+    expression="0",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+arcpy.management.CalculateField(
+    in_table="parcel_DB_ROW",
+    field="zoning",
+    expression="'parcel_ROW'",
+    expression_type="PYTHON3",
+    code_block="",
+    field_type="TEXT",
+    enforce_domains="NO_ENFORCE_DOMAINS"
+)
+
+arcpy.analysis.PairwiseDissolve(
+    in_features="parcel_DB_ROW",
+    out_feature_class="parcel_DB_ROW_dissolve",
+    dissolve_field="max_dua;max_far;zoning",
+    statistics_fields=None,
+    multi_part="MULTI_PART",
+    concatenation_separator=""
+)
+
+arcpy.analysis.PairwiseErase(
+    in_features="statewide_zoning_3A_update_20260323_dissolve",
+    erase_features="parcel_DB_ROW_dissolve",
+    out_feature_class="statewide_zoning_3A_update_20260323_erase_ROW",
+    cluster_tolerance=None
+)
+
+arcpy.management.Merge(
+    inputs="statewide_zoning_3A_update_20260323_erase_ROW;parcel_DB_ROW",
+    output="statewide_zoning_ROW_adjusted",
+    field_mappings=None,
+    add_source="NO_SOURCE_INFO",
+    field_match_mode="AUTOMATIC"
+)
+
+
+```
+
+
+# R processing
+```{r}
+
+cam4 <- st_read(dsn = project_gdb,
+                layer='Cambridge_C1_parcels_4story') |> 
+  mutate(zoning.new = 'cambridge_4story',
+         res_sqft = round(bldg_footprint_sqft * 0.85),
+         units_per_floor = round(res_sqft / 1000),
+         units_4story = units_per_floor * 4,
+         max_units = case_when(
+           EST_UNITS > units_4story ~ EST_UNITS,
+           .default = units_4story),
+         new_max_dua = round(max_units / lot_acres, 1)
+         )
+
+cam6 <- st_read(dsn = project_gdb,
+                layer='Cambridge_C1_parcels_5000sqft') |> 
+  mutate(res_sqft = round(bldg_footprint_sqft * 0.85),
+         units_per_floor = round(res_sqft / 1000),
+         units_4story = units_per_floor * 4,
+         units_6story = units_per_floor * 6,
+         max_units_4story = case_when(
+           EST_UNITS > units_4story ~ EST_UNITS,
+           .default = units_4story),
+         max_units_6story = case_when(
+           EST_UNITS > units_6story ~ EST_UNITS,
+           .default = units_6story)
+         )
+
+cam6.max <- sum(cam6$max_units_6story)
+cam6.target <- round(0.15 * cam6.max)
+
+par_sample <- cam6 |> 
+  slice_sample(prop = 1) |> 
+  mutate(running_total = cumsum(max_units_6story)) |> 
+  slice(1:which.max(running_total >= cam6.target)) |> 
+  mutate(max_units = max_units_4story,
+         new_max_dua = round(max_units / lot_acres, 1),
+         zoning.new = 'cambridge_6story') |> 
+  select(LOC_ID, new_max_dua, zoning.new)
+
+cam6to4 <- cam6 |> filter(!LOC_ID %in% par_sample$LOC_ID) |> 
+  mutate(max_units = max_units_4story,
+         new_max_dua = round(max_units / lot_acres, 1),
+         zoning.new = 'cambridge_4story') |> 
+  select(LOC_ID, new_max_dua, zoning.new)
+
+cam.comb <- cam4 |> 
+  select(LOC_ID, new_max_dua, zoning.new) |> 
+  rbind(cam6to4) |> 
+  rbind(par_sample) %>% 
+  st_drop_geometry() |> 
+  setDT()
+
+cam.par <- st_read(dsn=project_gdb,
+                   layer='parcel_Cambridge_C1_developable') |> 
+  left_join(cam.comb, by='LOC_ID') |> 
+  mutate(
+    max_dua = case_when(
+    !is.na(new_max_dua) ~ round(new_max_dua,1),
+    .default=max_dua),
+    zoning = case_when(
+      !is.na(zoning.new) ~ zoning.new,
+      .default=zoning),
+    max_far = round(max_far,2)
+  ) |>  
+  select(LOC_ID,max_dua,max_far,zoning,Shape) |> 
+  st_zm()
+    
+st_write(cam.par,
+         dsn=project_gdb, 
+         layer='Cambridge_C1_updated_dua',
+         append = F)
+
+```
+
+
+# 4 - Process Conservation Layer Constraint
+
+```{r}
+
+cons50 <- rast(paste0(sp_path,'Conservation_v1_2050.tif')) |> 
+  project('EPSG:26986')
+
+cons50[cons50!=20] <- NA
+
+poly50 <- as.polygons(cons50, aggregate = TRUE, na.rm = TRUE) %>%
+  st_as_sf() |> 
+  mutate(max_dua = 0,
+         max_far = 0,
+         zoning = 'Conservation_v1_2050') |> 
+  select(-Conservation_v1_2050)
+
+st_write(poly50, 
+         dsn = project_gdb,
+         layer = 'Conservation_v1_2050_new_area',
+         append = F)
+
+```
+
+
+# 5 - Erase and Merge all constraint layers
+
+# Arcpy
+
+```{python}
+
+import arcpy
+import os
+from arcpy import env
+
+env.workspace = r.project_gdb
+env.overwriteOutput = True
+
+
+arcpy.analysis.PairwiseDissolve(
+    in_features="Cambridge_C1_updated_dua",
+    out_feature_class="Cambridge_C1_updated_dua_dissolve",
+    dissolve_field="max_dua;max_far;zoning",
+    statistics_fields=None,
+    multi_part="MULTI_PART",
+    concatenation_separator=""
+)
+
+```
+
+# R
+
+```{r}
+
+swm <- st_read(dsn=project_gdb,
+               layer="statewide_zoning_3A_update_20260323_dissolve")%>%
+  st_set_precision(1000000)%>%
+  lwgeom::st_make_valid(.) %>%
+  st_buffer(., dist = 0)
+swm <- vect(swm)
+
+adu <- st_read(dsn=project_gdb,
+               layer="ADU_adjusted_dua_dissolve") %>%
+  st_set_precision(1000000)%>%
+  lwgeom::st_make_valid(.) %>%
+  st_buffer(., dist = 0)
+adu <- st_union(st_combine(adu))
+adu <- vect(adu)
+
+camb <- st_read(dsn=project_gdb,
+               layer="Cambridge_C1_updated_dua_dissolve")%>%
+  st_set_precision(1000000)%>%
+  lwgeom::st_make_valid(.) %>%
+  st_buffer(., dist = 0)
+camb <- st_union(st_combine(camb))
+camb <- vect(camb)
+
+swm.adu.erase <- erase(swm, adu)
+swm.adu.camb.erase <- erase(swm.adu.erase, camb)
+
+exp <- st_as_sf(swm.adu.camb.erase)
+st_write(exp, "statewide_zoning_erase_ROW_ADU_Cambridge.gpkg", append=F)
+
+
+```
+
+
+```{python}
+# arcpy.analysis.PairwiseErase(
+#     in_features="statewide_zoning_3A_update_20260323_dissolve",
+#     erase_features="ADU_adjusted_dua_dissolve",
+#     out_feature_class="statewide_zoning_erase_ROW_ADU",
+#     cluster_tolerance=None
+# )
+# 
+# arcpy.analysis.PairwiseErase(
+#     in_features="statewide_zoning_erase_ROW_ADU",
+#     erase_features="Cambridge_C1_updated_dua_dissolve",
+#     out_feature_class="statewide_zoning_erase_ROW_ADU_Cambridge",
+#     cluster_tolerance=None
+# )
+
+arcpy.management.Merge(
+    inputs="statewide_zoning_erase_ROW_ADU_Cambridge;ADU_adjusted_dua_dissolve;Cambridge_C1_updated_dua_dissolve",
+    output="statewide_zoning_ROW_ADU_Cambridge_update_20260416",
+    field_mappings=None,
+    add_source="NO_SOURCE_INFO",
+    field_match_mode="AUTOMATIC"
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="statewide_zoning_ROW_ADU_Cambridge_update_20260416",
+    clip_features="mapc_munis",
+    out_feature_class="mapc_zoning_ROW_ADU_Cambridge_update_20260416",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+
+
+```
+
+
+## Scenario 1 Constraints with Conservation_v1
+
+```{python}
+
+import arcpy
+import os
+from arcpy import env
+
+env.workspace = r.project_gdb
+env.overwriteOutput = True
+
+
+arcpy.analysis.PairwiseErase(
+    in_features="statewide_zoning_no3A",
+    erase_features="Conservation_v1_2050_new_area",
+    out_feature_class="statewide_zoning_no3A_erase_Conservation_v1_2050",
+    cluster_tolerance=None
+)
+
+arcpy.management.Merge(
+    inputs="statewide_zoning_no3A_erase_Conservation_v1_2050;Conservation_v1_2050_new_area",
+    output="swm_EEA_Scenario_1_constraint_layer",
+    field_mappings=None,
+    add_source="NO_SOURCE_INFO",
+    field_match_mode="AUTOMATIC"
+)
+
+arcpy.analysis.PairwiseDissolve(
+    in_features="swm_EEA_Scenario_1_constraint_layer",
+    out_feature_class="swm_EEA_Scenario_1_constraint_layer_dissolve",
+    dissolve_field="max_dua;max_far;zoning",
+    statistics_fields=None,
+    multi_part="MULTI_PART",
+    concatenation_separator=""
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="swm_EEA_Scenario_1_constraint_layer_dissolve",
+    clip_features="mapc_munis",
+    out_feature_class="mapc_EEA_Scenario_1_constraint_layer_dissolve",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="swm_EEA_Scenario_1_constraint_layer_dissolve",
+    out_features= r.scen1_gdb + "swm_EEA_Scenario_1_constraint_layer_dissolve"
+)
+arcpy.conversion.ExportFeatures(
+    in_features="mapc_EEA_Scenario_1_constraint_layer_dissolve",
+    out_features= r.scen1_gdb + "mapc_EEA_Scenario_1_constraint_layer_dissolve"
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="swm_EEA_Scenario_1_constraint_layer_dissolve",
+    out_features= r.scen1_sp_path + "swm_EEA_Scenario_1_constraint_layer_dissolve.shp"
+)
+arcpy.conversion.ExportFeatures(
+    in_features="mapc_EEA_Scenario_1_constraint_layer_dissolve",
+    out_features= r.scen1_sp_path + "mapc_EEA_Scenario_1_constraint_layer_dissolve.shp"
+)
+
+```
+
+## Scenario 2 Constraints with Conservation_v1
+```{python}
+
+import arcpy
+import os
+from arcpy import env
+
+env.workspace = r.project_gdb
+env.overwriteOutput = True
+
+
+arcpy.analysis.PairwiseErase(
+    in_features="statewide_zoning_ROW_ADU_Cambridge_update_20260416",
+    erase_features="Conservation_v1_2050_new_area",
+    out_feature_class="statewide_zoning_erase_ROW_ADU_Cambridge_Conservation_v1_2050",
+    cluster_tolerance=None
+)
+
+arcpy.management.Merge(
+    inputs="statewide_zoning_ROW_ADU_Cambridge_update_20260416;Conservation_v1_2050_new_area",
+    output="swm_EEA_Scenario_2_constraint_layer",
+    field_mappings=None,
+    add_source="NO_SOURCE_INFO",
+    field_match_mode="AUTOMATIC"
+)
+
+arcpy.analysis.PairwiseDissolve(
+    in_features="swm_EEA_Scenario_2_constraint_layer",
+    out_feature_class="swm_EEA_Scenario_2_constraint_layer_dissolve",
+    dissolve_field="max_dua;max_far;zoning",
+    statistics_fields=None,
+    multi_part="MULTI_PART",
+    concatenation_separator=""
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="swm_EEA_Scenario_2_constraint_layer_dissolve",
+    clip_features="mapc_munis",
+    out_feature_class="mapc_EEA_Scenario_2_constraint_layer_dissolve",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="swm_EEA_Scenario_2_constraint_layer_dissolve",
+    out_features= r.scen2_gdb + "swm_EEA_Scenario_2_constraint_layer_dissolve"
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="mapc_EEA_Scenario_2_constraint_layer_dissolve",
+    out_features= r.scen2_gdb + "mapc_EEA_Scenario_2_constraint_layer_dissolve"
+)
+
+arcpy.conversion.ExportFeatures(
+    in_features="swm_EEA_Scenario_2_constraint_layer_dissolve",
+    out_features= r.scen2_sp_path + "swm_EEA_Scenario_2_constraint_layer_dissolve.shp"
+)
+arcpy.conversion.ExportFeatures(
+    in_features="mapc_EEA_Scenario_2_constraint_layer_dissolve",
+    out_features= r.scen2_sp_path + "mapc_EEA_Scenario_2_constraint_layer_dissolve.shp"
+)
+
+
+```
+
