@@ -46,13 +46,13 @@ scen3_gdb = paste0(scen3_sp_path, 'Scenario_3.gdb')
 scen4_sp_path = paste0(data_path,'/Task_4/Scenario_4/Zoning/Spatial/')
 scen4_gdb = paste0(scen4_sp_path, 'Scenario_4.gdb')
 
-# sp_path <- paste0(data_path,'/Spatial/')
-# tab_path <- paste0(data_path,'/Tabular/')
-# project_gdb <- paste0(sp_path, 'EEA_MLCA.gdb')
+sp_path <- scen2_sp_path
+tab_path <- paste0(data_path,'/Tabular/')
+project_gdb <- scen2_gdb
 
-tab_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
-sp_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
-project_gdb <- paste0(sp_path, 'EEA_MLCA_constraints.gdb')
+# tab_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
+# sp_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
+# project_gdb <- paste0(sp_path, 'EEA_MLCA_constraints.gdb')
 
 
 knitr::opts_knit$set(root.dir = data_path)
@@ -229,7 +229,7 @@ arcpy.management.SelectLayerByAttribute(
 arcpy.management.CalculateField(
     in_table="parcel_sewer_service_area_developable",
     field="max_dua",
-    expression="Round(($feature.max_lot_units + 1) / $feature.lot_acres), 1",
+    expression="Round((($feature.max_lot_units + 1) / $feature.lot_acres), 1)",
     expression_type="ARCADE",
     code_block="",
     field_type="TEXT",
@@ -456,81 +456,81 @@ arcpy.conversion.ExportFeatures(
     out_features="Cambridge_C1_parcels_4story"
 )
 
-arcpy.management.SelectLayerByAttribute(
-    in_layer_or_view="parcel_DB_statewide_zoning_join_largest_overlap",
-    selection_type="NEW_SELECTION",
-    where_clause="POLY_TYPE NOT IN ('FEE', 'TAX')",
-    invert_where_clause=None
-)
-
-keep_fields = ["OBJECTID","geom","max_dua","max_far","zoning"] # Always keep geometry
-
-# Create FieldMappings object
-field_mappings = arcpy.FieldMappings()
-field_mappings.addTable("parcel_DB_statewide_zoning_join_largest_overlap")
-
-# Identify and remove fields NOT in your 'keep' list
-for field in field_mappings.fields:
-    if field.name not in keep_fields:
-        field_mappings.removeFieldMap(field_mappings.findFieldMapIndex(field.name))
-
-arcpy.conversion.ExportFeatures(
-    in_features="parcel_DB_statewide_zoning_join_largest_overlap",
-    out_features="parcel_DB_ROW",
-    field_mapping=field_mappings
-)
-
-arcpy.management.CalculateField(
-    in_table="parcel_DB_ROW",
-    field="max_dua",
-    expression="0",
-    expression_type="PYTHON3",
-    code_block="",
-    field_type="TEXT",
-    enforce_domains="NO_ENFORCE_DOMAINS"
-)
-arcpy.management.CalculateField(
-    in_table="parcel_DB_ROW",
-    field="max_far",
-    expression="0",
-    expression_type="PYTHON3",
-    code_block="",
-    field_type="TEXT",
-    enforce_domains="NO_ENFORCE_DOMAINS"
-)
-arcpy.management.CalculateField(
-    in_table="parcel_DB_ROW",
-    field="zoning",
-    expression="'parcel_ROW'",
-    expression_type="PYTHON3",
-    code_block="",
-    field_type="TEXT",
-    enforce_domains="NO_ENFORCE_DOMAINS"
-)
-
-arcpy.analysis.PairwiseDissolve(
-    in_features="parcel_DB_ROW",
-    out_feature_class="parcel_DB_ROW_dissolve",
-    dissolve_field="max_dua;max_far;zoning",
-    statistics_fields=None,
-    multi_part="MULTI_PART",
-    concatenation_separator=""
-)
-
-arcpy.analysis.PairwiseErase(
-    in_features="statewide_zoning_3A_update_20260323_dissolve",
-    erase_features="parcel_DB_ROW_dissolve",
-    out_feature_class="statewide_zoning_3A_update_20260323_erase_ROW",
-    cluster_tolerance=None
-)
-
-arcpy.management.Merge(
-    inputs="statewide_zoning_3A_update_20260323_erase_ROW;parcel_DB_ROW",
-    output="statewide_zoning_ROW_adjusted",
-    field_mappings=None,
-    add_source="NO_SOURCE_INFO",
-    field_match_mode="AUTOMATIC"
-)
+# arcpy.management.SelectLayerByAttribute(
+#     in_layer_or_view="parcel_DB_statewide_zoning_join_largest_overlap",
+#     selection_type="NEW_SELECTION",
+#     where_clause="POLY_TYPE NOT IN ('FEE', 'TAX')",
+#     invert_where_clause=None
+# )
+# 
+# keep_fields = ["OBJECTID","geom","max_dua","max_far","zoning"] # Always keep geometry
+# 
+# # Create FieldMappings object
+# field_mappings = arcpy.FieldMappings()
+# field_mappings.addTable("parcel_DB_statewide_zoning_join_largest_overlap")
+# 
+# # Identify and remove fields NOT in your 'keep' list
+# for field in field_mappings.fields:
+#     if field.name not in keep_fields:
+#         field_mappings.removeFieldMap(field_mappings.findFieldMapIndex(field.name))
+# 
+# arcpy.conversion.ExportFeatures(
+#     in_features="parcel_DB_statewide_zoning_join_largest_overlap",
+#     out_features="parcel_DB_ROW",
+#     field_mapping=field_mappings
+# )
+# 
+# arcpy.management.CalculateField(
+#     in_table="parcel_DB_ROW",
+#     field="max_dua",
+#     expression="0",
+#     expression_type="PYTHON3",
+#     code_block="",
+#     field_type="TEXT",
+#     enforce_domains="NO_ENFORCE_DOMAINS"
+# )
+# arcpy.management.CalculateField(
+#     in_table="parcel_DB_ROW",
+#     field="max_far",
+#     expression="0",
+#     expression_type="PYTHON3",
+#     code_block="",
+#     field_type="TEXT",
+#     enforce_domains="NO_ENFORCE_DOMAINS"
+# )
+# arcpy.management.CalculateField(
+#     in_table="parcel_DB_ROW",
+#     field="zoning",
+#     expression="'parcel_ROW'",
+#     expression_type="PYTHON3",
+#     code_block="",
+#     field_type="TEXT",
+#     enforce_domains="NO_ENFORCE_DOMAINS"
+# )
+# 
+# arcpy.analysis.PairwiseDissolve(
+#     in_features="parcel_DB_ROW",
+#     out_feature_class="parcel_DB_ROW_dissolve",
+#     dissolve_field="max_dua;max_far;zoning",
+#     statistics_fields=None,
+#     multi_part="MULTI_PART",
+#     concatenation_separator=""
+# )
+# 
+# arcpy.analysis.PairwiseErase(
+#     in_features="statewide_zoning_3A_update_20260323_dissolve",
+#     erase_features="parcel_DB_ROW_dissolve",
+#     out_feature_class="statewide_zoning_3A_update_20260323_erase_ROW",
+#     cluster_tolerance=None
+# )
+# 
+# arcpy.management.Merge(
+#     inputs="statewide_zoning_3A_update_20260323_erase_ROW;parcel_DB_ROW",
+#     output="statewide_zoning_ROW_adjusted",
+#     field_mappings=None,
+#     add_source="NO_SOURCE_INFO",
+#     field_match_mode="AUTOMATIC"
+# )
 
 
 ```
@@ -602,7 +602,7 @@ cam.par <- st_read(dsn=project_gdb,
       .default=zoning),
     max_far = round(max_far,2)
   ) |>  
-  select(LOC_ID,max_dua,max_far,zoning,Shape) |> 
+  select(LOC_ID,max_dua,max_far,zoning,geom) |> 
   st_zm()
     
 st_write(cam.par,
@@ -617,7 +617,7 @@ st_write(cam.par,
 
 ```{r}
 
-cons50 <- rast(paste0(sp_path,'Conservation_v1_2050.tif')) |> 
+cons50 <- rast(paste0(sp_path,'Scenario_1_and_2_conservation2050_v2.tif')) |> 
   project('EPSG:26986')
 
 cons50[cons50!=20] <- NA
@@ -626,12 +626,12 @@ poly50 <- as.polygons(cons50, aggregate = TRUE, na.rm = TRUE) %>%
   st_as_sf() |> 
   mutate(max_dua = 0,
          max_far = 0,
-         zoning = 'Conservation_v1_2050') |> 
-  select(-Conservation_v1_2050)
+         zoning = 'Conservation_v2_2050') |> 
+  select(-Scenario_1_and_2_conservation2050_v2)
 
 st_write(poly50, 
          dsn = project_gdb,
-         layer = 'Conservation_v1_2050_new_area',
+         layer = 'Conservation_v2_2050_new_area',
          append = F)
 
 ```
@@ -669,14 +669,14 @@ arcpy.analysis.PairwiseDissolve(
 swm <- st_read(dsn=project_gdb,
                layer="statewide_zoning_3A_update_20260323_dissolve")%>%
   st_set_precision(1000000)%>%
-  lwgeom::st_make_valid(.) %>%
+  lwgeom::lwgeom_make_valid(.) %>%
   st_buffer(., dist = 0)
 swm <- vect(swm)
 
 adu <- st_read(dsn=project_gdb,
                layer="ADU_adjusted_dua_dissolve") %>%
   st_set_precision(1000000)%>%
-  lwgeom::st_make_valid(.) %>%
+  lwgeom::lwgeom_make_valid(.) %>%
   st_buffer(., dist = 0)
 adu <- st_union(st_combine(adu))
 adu <- vect(adu)
@@ -684,7 +684,7 @@ adu <- vect(adu)
 camb <- st_read(dsn=project_gdb,
                layer="Cambridge_C1_updated_dua_dissolve")%>%
   st_set_precision(1000000)%>%
-  lwgeom::st_make_valid(.) %>%
+  lwgeom::lwgeom_make_valid(.) %>%
   st_buffer(., dist = 0)
 camb <- st_union(st_combine(camb))
 camb <- vect(camb)
@@ -700,19 +700,19 @@ st_write(exp, "statewide_zoning_erase_ROW_ADU_Cambridge.gpkg", append=F)
 
 
 ```{python}
-# arcpy.analysis.PairwiseErase(
-#     in_features="statewide_zoning_3A_update_20260323_dissolve",
-#     erase_features="ADU_adjusted_dua_dissolve",
-#     out_feature_class="statewide_zoning_erase_ROW_ADU",
-#     cluster_tolerance=None
-# )
-# 
-# arcpy.analysis.PairwiseErase(
-#     in_features="statewide_zoning_erase_ROW_ADU",
-#     erase_features="Cambridge_C1_updated_dua_dissolve",
-#     out_feature_class="statewide_zoning_erase_ROW_ADU_Cambridge",
-#     cluster_tolerance=None
-# )
+arcpy.analysis.PairwiseErase(
+    in_features="statewide_zoning_3A_update_20260323_dissolve",
+    erase_features="ADU_adjusted_dua_dissolve",
+    out_feature_class="statewide_zoning_erase_ROW_ADU",
+    cluster_tolerance=None
+)
+
+arcpy.analysis.PairwiseErase(
+    in_features="statewide_zoning_erase_ROW_ADU",
+    erase_features="Cambridge_C1_updated_dua_dissolve",
+    out_feature_class="statewide_zoning_erase_ROW_ADU_Cambridge",
+    cluster_tolerance=None
+)
 
 arcpy.management.Merge(
     inputs="statewide_zoning_erase_ROW_ADU_Cambridge;ADU_adjusted_dua_dissolve;Cambridge_C1_updated_dua_dissolve",
