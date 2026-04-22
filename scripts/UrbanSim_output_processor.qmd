@@ -491,8 +491,9 @@ for (run in SWM_run) {
       rename(muni_id = muni_id.x)
     
 dt.hh <- dt |> 
-  select(bl10_id,total_households) |> 
-  setnames('total_households',paste0('total_households_',yr+1))
+  select(bl10_id,total_households,total_jobs) |> 
+  setnames('total_households',paste0('total_households_',yr+1)) |>
+  setnames('total_jobs',paste0('total_jobs_',yr+1))
 
 swm.hh <- left_join(swm.hh, dt.hh, by='bl10_id')
 
@@ -652,8 +653,9 @@ for (run in MAPCM_run) {
       rename(muni_id = muni_id.x)
     
 dt.hh <- dt |> 
-  select(bl10_id,total_households) |> 
-  setnames('total_households',paste0('total_households_',yr+1))
+  select(bl10_id,total_households,total_jobs) |> 
+  setnames('total_households',paste0('total_households_',yr+1)) |>
+  setnames('total_jobs',paste0('total_jobs_',yr+1))
 
 mapcm.hh <- left_join(mapcm.hh, dt.hh, by='bl10_id')
 
@@ -670,24 +672,61 @@ setorder(m2,bl10_id)
 m2[,blockgroup2010_geoid:=substr(bl10_id,1,12)]
 m2[,tract2010_geoid:=substr(bl10_id,1,11)]
 setnames(m2,'bl10_id','block2010_geoid')
+setnames(m2,'total_households_2011','total_households_2010')
+setnames(m2,'total_jobs_2011','total_jobs_2010')
 
-sf.hh <- st_as_sf(m2,crs=26986)
-
-
-st_write(sf.hh,
-         dsn = project_gdb,
-         layer = paste0(scen, '_households_by_block_5yr_',min(years)+1,'_to_',max(years)+1),
-         append = FALSE)
 
 # Add 2000 and 2010 tract level households and employment
 var00 <- load_variables(2000,'sf1')
+var00[grepl('HOUSEHOLDS',concept)]
 
-hh00 <- get_decennial(
+xw <- fread(paste0(data_path,'/nhgis_blk2000_blk2010_25.csv')) |> 
+  select(blk2000ge, blk2010ge, weight) |> 
+  rename(GEOID = blk2000ge,
+         block2010_geoid = blk2010ge) |> 
+  mutate(GEOID = as.character(GEOID))
+
+m3 <- get_decennial(
   state='MA',
-  geography='tract',
+  geography='block',
   year=2000,
-  table='P15'
-)
+  variables='P015001'
+) |> 
+  rename(households2000 = value) |> 
+  left_join(xw, by='GEOID') |> 
+  mutate(hh00_10 = households2000 * weight) |> 
+  group_by(block2010_geoid) |> 
+  summarize(total_households_2000 = round(sum(hh00_10))) |> 
+  mutate(block2010_geoid= as.character(block2010_geoid)) |> 
+  right_join(m2, by='block2010_geoid') |> 
+  relocate(total_households_2000, .after=mpo) |> 
+  setDT()
+
+cols <- names(m3)[7:16]
+trct <- m3[,lapply(.SD,sum),tract2010_geoid,.SDcols=(cols)]
+
+trct.sf <- tract_sf(2010) |> 
+  left_join(trct, by=c('ct10_id'='tract2010_geoid')) |> 
+  setorder(ct10_id) |> 
+  rename(tract2010_geoid = ct10_id)
+
+            
+st_write(trct.sf, dsn = urbsim_gpkg, layer ='urbansim_households_and_employment_by_tract_2000_2035')
+# 
+# blk_emp <- lehdr::grab_lodes(state='ma',year=2016,lodes_type='wac') |> 
+#   select(w_geocode,C000) |> 
+#   setnames(c('bl10_id','emp2016')) |> 
+#   setDT()
+
+
+
+
+sf.hh <- st_as_sf(m3,crs=26986)
+
+# st_write(sf.hh,
+#          dsn = project_gdb,
+#          layer = paste0(scen, '_households_and_employment_by_block_5yr_',min(years)+1,'_to_',max(years)+1),
+#          append = FALSE)
 
 
 # Base year existing housing unit capacity levels

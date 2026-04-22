@@ -650,16 +650,24 @@ from arcpy import env
 env.workspace = r.project_gdb
 env.overwriteOutput = True
 
+# 
+# arcpy.analysis.PairwiseDissolve(
+#     in_features="Cambridge_C1_updated_dua",
+#     out_feature_class="Cambridge_C1_updated_dua_dissolve",
+#     dissolve_field="max_dua;max_far;zoning",
+#     statistics_fields=None,
+#     multi_part="MULTI_PART",
+#     concatenation_separator=""
+# )
 
-arcpy.analysis.PairwiseDissolve(
-    in_features="Cambridge_C1_updated_dua",
-    out_feature_class="Cambridge_C1_updated_dua_dissolve",
-    dissolve_field="max_dua;max_far;zoning",
-    statistics_fields=None,
-    multi_part="MULTI_PART",
-    concatenation_separator=""
+
+arcpy.analysis.PairwiseClip(
+    in_features="statewide_zoning_3A_update_20260323",
+    clip_features="munis_adu_camb_erase",
+    out_feature_class="statewide_zonin_adu_camb_clip",
+    cluster_tolerance=None,
+    precision="DEFAULT_PRECISION"
 )
-
 ```
 
 # R
@@ -698,7 +706,7 @@ st_erase_big = function(x, y){
   dplyr::bind_rows(difference,nointer_x)
 } 
 
-adu.erase <- st_erase_big(adu.sf, camb.sf)
+sf.adu.erase <- st_erase_big(adu.sf, camb.sf)
 
 
 swm <- st_read(dsn=project_gdb,
@@ -719,19 +727,19 @@ st_write(exp, "C:/Users/cgate/Desktop/statewide_zoning_erase_ROW_ADU_Cambridge.g
 
 
 ```{python}
-arcpy.analysis.PairwiseErase(
-    in_features="statewide_zoning_3A_update_20260323_dissolve",
-    erase_features="ADU_adjusted_dua_dissolve",
-    out_feature_class="statewide_zoning_erase_ROW_ADU",
-    cluster_tolerance=None
-)
-
-arcpy.analysis.PairwiseErase(
-    in_features="statewide_zoning_erase_ROW_ADU",
-    erase_features="Cambridge_C1_updated_dua_dissolve",
-    out_feature_class="statewide_zoning_erase_ROW_ADU_Cambridge",
-    cluster_tolerance=None
-)
+# arcpy.analysis.PairwiseErase(
+#     in_features="statewide_zoning_3A_update_20260323_dissolve",
+#     erase_features="ADU_adjusted_dua_dissolve",
+#     out_feature_class="statewide_zoning_erase_ROW_ADU",
+#     cluster_tolerance=None
+# )
+# 
+# arcpy.analysis.PairwiseErase(
+#     in_features="statewide_zoning_erase_ROW_ADU",
+#     erase_features="Cambridge_C1_updated_dua_dissolve",
+#     out_feature_class="statewide_zoning_erase_ROW_ADU_Cambridge",
+#     cluster_tolerance=None
+# )
 
 arcpy.management.Merge(
     inputs="statewide_zoning_erase_ROW_ADU_Cambridge;ADU_adjusted_dua_dissolve;Cambridge_C1_updated_dua_dissolve",
