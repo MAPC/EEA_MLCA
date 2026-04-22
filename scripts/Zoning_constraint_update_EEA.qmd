@@ -666,34 +666,53 @@ arcpy.analysis.PairwiseDissolve(
 
 ```{r}
 
-swm <- st_read(dsn=project_gdb,
-               layer="statewide_zoning_3A_update_20260323_dissolve")%>%
-  st_set_precision(1000000)%>%
-  lwgeom::lwgeom_make_valid(.) %>%
-  st_buffer(., dist = 0)
-swm <- vect(swm)
-
 adu <- st_read(dsn=project_gdb,
                layer="ADU_adjusted_dua_dissolve") %>%
-  st_set_precision(1000000)%>%
-  lwgeom::lwgeom_make_valid(.) %>%
+  st_set_precision(1000000)
+
+adu <- lwgeom::lwgeom_make_valid(adu$Shape) %>%
   st_buffer(., dist = 0)
 adu <- st_union(st_combine(adu))
-adu <- vect(adu)
+v.adu <- vect(adu)
+saveRDS(v.adu,paste0(sp_path,'adu_vect.rds'))
 
 camb <- st_read(dsn=project_gdb,
-               layer="Cambridge_C1_updated_dua_dissolve")%>%
-  st_set_precision(1000000)%>%
-  lwgeom::lwgeom_make_valid(.) %>%
+               layer="Cambridge_C1_updated_dua_dissolve") %>%
+  st_set_precision(1000000)
+camb <- lwgeom::lwgeom_make_valid(camb$SHAPE) %>%
   st_buffer(., dist = 0)
 camb <- st_union(st_combine(camb))
-camb <- vect(camb)
+v.camb <- vect(camb)
+saveRDS(v.camb,paste0(sp_path,'camb_vect.rds'))
 
-swm.adu.erase <- erase(swm, adu)
-swm.adu.camb.erase <- erase(swm.adu.erase, camb)
+# In terra spatvector
+adu.erase <- erase(v.adu, v.camb)
+
+# In sf
+st_erase_big = function(x, y){
+  x$ref <- 1:nrow(x)
+  x_inter = x[apply(st_intersects(x,y), 1, any),] #x in y
+  y_inter = y[apply(st_intersects(y,x), 1, any),] #y in x
+  difference <- st_difference(x_inter, st_union(y_inter)) #x_inter not in y_inter
+  nointer_x = x[!x$ref %in% x_inter$ref,] # x not intersecting
+  dplyr::bind_rows(difference,nointer_x)
+} 
+
+adu.erase <- st_erase_big(adu.sf, camb.sf)
+
+
+swm <- st_read(dsn=project_gdb,
+               layer="statewide_zoning_3A_update_20260323")%>%
+  st_set_precision(1000000)%>%
+  st_buffer(., dist = 0)
+v.swm <- vect(swm)
+saveRDS(v.swm,paste0(sp_path,'swm_vect.rds'))
+
+
+swm.adu.camb.erase <- erase(swm, adu.erase)
 
 exp <- st_as_sf(swm.adu.camb.erase)
-st_write(exp, "statewide_zoning_erase_ROW_ADU_Cambridge.gpkg", append=F)
+st_write(exp, "C:/Users/cgate/Desktop/statewide_zoning_erase_ROW_ADU_Cambridge.gpkg", append=F)
 
 
 ```
