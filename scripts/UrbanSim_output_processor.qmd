@@ -290,8 +290,8 @@ setnames(mmc, 'rpa_acr', 'mpo')
 
 # Load UMDI HHpop comparison data
 # Rebel towns are in OCPC
-for (run in c(MAPCM_run, SWM_run)) {
-# for (run in c(MAPCM_run)) {
+# for (run in c(MAPCM_run, SWM_run)) {
+for (run in c(MAPCM_run)) {
   if (run == MAPCM_run) {
     umdi <- fread(file.path(shop_path, 'pop.in.hhds.MAPC101_by.RPA.ageCAT6.csv')) |>
       select(year, rpa_acr, ageCAT6, hhpop) |>
@@ -611,8 +611,8 @@ cx <- function(x) {
 # 2.4 - Post-processor 04 - run person duplication/subtraction
 
 ```{r}
-for (run in c(MAPCM_run, SWM_run)) {
-# for (run in c(MAPCM_run)) {
+# for (run in c(MAPCM_run, SWM_run)) {
+for (run in c(MAPCM_run)) {
   for (yr in years) {
     flaglist <- data.table()
     
@@ -1556,7 +1556,6 @@ for (run in SWM_run) {
     ) |> 
       filter(!block_id %in% mapc_blks) |> 
       left_join(dev, by=c('block_id'='bl10_id')) |> 
-      filter(!is.na(dev_pct)) |> 
       setDT()
     
     dt[, year := yr + 1]
@@ -1753,10 +1752,11 @@ for (run in MAPCM_run) {
       )
     ) |> 
       left_join(dev, by=c('block_id'='bl10_id')) |> 
-      filter(!is.na(dev_pct)) |> 
       setDT()
     
     dt[, year := yr + 1]
+    dt[is.na(block_acres),block_acres:=acres]
+    dt[is.na(developable_acres),developable_acres:=0]
     
     dt <- dt[, .(
       year,
@@ -2194,9 +2194,95 @@ saveWorkbook(xl.indicators, paste0(scen_path,'/',scen,'_urbansim_indicators.xlsx
 setorder(m5,block_id)
 fwrite(m5, paste0(scen_path,'/',scen,'_urbansim_indicators_block2010.csv'))
 
+
+
 ```
 
-#p2
+# 3.2 - Scenario outputs For HF LULC Change Analysis
+
+```{r}
+
+s1 <- fread(paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_urbansim_indicators_block2010.csv')) |> 
+  select(block_id,
+         block_acres,
+         developable_acres,
+         total_households_2020,
+         total_households_2025,
+         total_households_2035,
+         total_households_2050,
+         total_residential_units_2020,
+         total_residential_units_2025,
+         total_residential_units_2035,
+         total_residential_units_2050,
+         single_fam_units_2020,
+         single_fam_units_2025,
+         single_fam_units_2035,
+         single_fam_units_2050,
+         multi_fam_units_2020,
+         multi_fam_units_2025,
+         multi_fam_units_2035,
+         multi_fam_units_2050,
+         total_jobs_2020,
+         total_jobs_2025,
+         total_jobs_2035,
+         total_jobs_2050) |> 
+  mutate(unit_change_2020_2050 = total_residential_units_2050 - total_residential_units_2020,
+         sf_unit_change_2020_2050 = single_fam_units_2050 - single_fam_units_2020,
+         mf_unit_change_2020_2050 = multi_fam_units_2050 - multi_fam_units_2020,
+         emp_change_2020_2050 = total_jobs_2050 - total_jobs_2020,
+         emp_change_2025_2050 = total_jobs_2050 - total_jobs_2025,
+         scenario = 'Scenario_1',
+         block_id = as.character(block_id)
+         ) |> 
+  relocate(scenario) |>
+  right_join(blk10_sf, by=c('block_id'='bl10_id'))
+
+st_write(s1, dsn = urbsim_gpkg, layer = 'Scenario_1_block_indicators', append=F)
+
+# Scenario 2
+
+s2 <- fread(paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_urbansim_indicators_block2010.csv')) |> 
+  select(block_id,
+         block_acres,
+         developable_acres,
+         total_households_2020,
+         total_households_2025,
+         total_households_2035,
+         total_households_2050,
+         total_residential_units_2020,
+         total_residential_units_2025,
+         total_residential_units_2035,
+         total_residential_units_2050,
+         single_fam_units_2020,
+         single_fam_units_2025,
+         single_fam_units_2035,
+         single_fam_units_2050,
+         multi_fam_units_2020,
+         multi_fam_units_2025,
+         multi_fam_units_2035,
+         multi_fam_units_2050,
+         total_jobs_2020,
+         total_jobs_2025,
+         total_jobs_2035,
+         total_jobs_2050) |> 
+  mutate(unit_change_2020_2050 = total_residential_units_2050 - total_residential_units_2020,
+         sf_unit_change_2020_2050 = single_fam_units_2050 - single_fam_units_2020,
+         mf_unit_change_2020_2050 = multi_fam_units_2050 - multi_fam_units_2020,
+         emp_change_2020_2050 = total_jobs_2050 - total_jobs_2020,
+         emp_change_2025_2050 = total_jobs_2050 - total_jobs_2025,
+         emp_per_dev_acre_2050 = total_jobs_2050 / developable_acres,
+         units_per_dev_acre_2050 = total_residential_units_2050 / developable_acres,
+         scenario = 'Scenario_2',
+         block_id = as.character(block_id)
+         ) |> 
+  relocate(scenario) |> 
+  right_join(blk10_sf, by=c('block_id'='bl10_id'))
+
+st_write(s2, dsn = urbsim_gpkg, layer = 'Scenario_2_block_indicators', append=F)
+st_write(s2, dsn = project_gdb, layer = 'Scenario_2_block_indicators', append=F)
+
+```
+
 
 ```{r}
 
