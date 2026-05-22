@@ -1,0 +1,92 @@
+---
+title: "Scenario 3 Inputs"
+author: "Conor Gately"
+format: html
+editor: source
+---
+
+# 1 - Setup: paths and parameters
+
+```{r, setup, include=FALSE}
+
+pacman::p_load(
+  sf,
+  data.table,
+  tidycensus,
+  tidyverse,
+  openxlsx,
+  tidygeocoder,
+  terra,
+  reticulate
+)
+
+
+# devtools::install_github('MAPC/mapcdatakeys')
+library(mapcdatakeys)
+
+
+reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+
+# Paths
+if (grepl('VM',Sys.info()[['nodename']])){
+  base <- '//data-sync/Public/DataServices'
+} else {
+  base <- 'S:/Network Shares/K Drive/DataServices'
+}
+
+
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
+
+scen_path = paste0(data_path,'/Task_4/Scenario_3/')
+sp_path <- paste0(scen_path,'Inputs/Spatial/')
+scen_gdb = paste0(sp_path, 'Scenario_3.gdb')
+
+
+knitr::opts_knit$set(root.dir = data_path)
+```
+
+# 2 - Zoning Constraint Adjustments
+
+# 3 - Development Pipeline Adjustments
+
+```{r}
+
+urb.ctr <- mapcdatakeys::all_muni_data_keys |> 
+  select(muni_id,cmtyp08) |> 
+  filter(cmtyp08 == 'Regional Urban Center')
+
+blk.ctr <- mapcdatakeys::geog_xw_2010 |> 
+  filter(muni_id %in% urb.ctr$muni_id)
+
+
+
+mb.raw <- st_read(
+  dsn = file.path(data_path, 'Spatial/all_massbuilds.gpkg'),
+  layer = 'all_massbuilds_projects_in_urbansim_20260407'
+  ) |>
+  setDT()
+
+mb30 <- mb.raw |>
+  st_drop_geometry() |>
+  filter(start_year>2030) |>
+  select(identification, start_year, residential_units, employment_capacity) |>
+  mutate(res_proj=case_when(
+    residential_units>0 ~ 1,
+    .default=0),
+    comm_proj = case_when(
+      employment_capacity>0 ~ 1,
+      .default=0)
+    )|>
+  group_by(start_year) |>
+  summarize(
+    mb_emp_cap_added = sum(employment_capacity, na.rm = T),
+    mb_res_units_added = sum(residential_units, na.rm = T),
+    res_proj = sum(res_proj),
+    comm_proj = sum(comm_proj)
+  )
+
+
+
+```
+
+# 4 - Skims Adjustments

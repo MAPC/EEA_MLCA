@@ -1961,32 +1961,6 @@ m3 <- m2 |>
   setDT()
 
 
-# mb.raw <- st_read(
-#   dsn = file.path(data_path, 'Spatial/all_massbuilds.gpkg'),
-#   layer = 'all_massbuilds_projects_in_urbansim_20260407'
-#   ) |> 
-#   setDT()
-# 
-# mb <- mb.raw |>
-#   st_drop_geometry() |> 
-#   filter(start_year>2019) |> 
-#   select(identification, start_year, residential_units, employment_capacity) |>
-#   mutate(res_proj=case_when(
-#     residential_units>0 ~ 1,
-#     .default=0),
-#     comm_proj = case_when(
-#       employment_capacity>0 ~ 1,
-#       .default=0)
-#     )|> 
-#   group_by(start_year) |>
-#   summarize(
-#     mb_emp_cap_added = sum(employment_capacity, na.rm = T),
-#     mb_res_units_added = sum(residential_units, na.rm = T),
-#     res_proj = sum(res_proj),
-#     comm_proj = sum(comm_proj)
-#   ) 
-# fwrite(mb,'C:/Users/cgate/Desktop/massbuilds_by_year.csv')
-
 pop.df <- data.table()
 for (yr in years) {
   if (yr<2020){
@@ -2159,6 +2133,42 @@ writeData(xl.indicators, sheet = 'MPO', x = rbind(mpo.indicators,state.indicator
 writeData(xl.indicators, sheet = 'Community Type', x = cmtype.indicators)
 writeData(xl.indicators, sheet = 'Municipal', x = muni.indicators)
 
+
+meta <- data.table(
+  employment_aggregation = seq(1, 10),
+  sector_description = c(
+    'Construction',
+    'Education and Health Services',
+    'Financial Activities',
+    'Government',
+    'Information',
+    'Leisure and Hospitality',
+    'Manufacturing',
+    'Mining and Logging / Other Services',
+    'Professional and Business Services',
+    'Trade, Transportation, Utilities'
+  )
+)
+
+addWorksheet(xl.indicators, sheetName = 'employment sector metadata')
+writeData(xl.indicators, sheet = 'employment sector metadata', x = meta)
+
+# Styles for sheet
+setColWidths(
+  xl.indicators,
+  cols=1:ncol(meta),
+  sheet = 'employment sector metadata',
+  widths = "auto"
+)
+addStyle(
+  xl.indicators,
+  sheet = 'employment sector metadata',
+  style = boldStyle,
+  cols=1:ncol(meta),
+  rows = 1,
+  gridExpand = TRUE
+)
+
 setColWidths(
   xl.indicators,
   cols=1:139,
@@ -2210,10 +2220,10 @@ addStyle(
   gridExpand = TRUE
 )
 
-saveWorkbook(xl.indicators, paste0(scen_path,'/',scen,'_urbansim_indicators.xlsx'), overwrite = T)
+saveWorkbook(xl.indicators, paste0(scen_path,'/',scen,'_urbansim_summary_indicators.xlsx'), overwrite = T)
 
 setorder(m5,block_id)
-fwrite(m5, paste0(scen_path,'/',scen,'_urbansim_indicators_block2010.csv'))
+fwrite(m5, paste0(scen_path,'/',scen,'_urbansim_block_indicators.csv'))
 
 
 
@@ -2268,20 +2278,17 @@ s1 <- fread(paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_urb
          ) |> 
   relocate(scenario) |>
   right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
-  relocate(c(muni_id,muni_name,rpa_acr,mpo,geometry),.after=block_id)
+  relocate(c(muni_id,muni_name,rpa_acr,mpo),.after=block_id)
 
 st_write(s1, paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_block_indicators.gpkg'), append=F)
 
-ns <- names(s1)[8:ncol(s1)]
+ns <- names(s1)[4:ncol(s1)]
 setDT(s1)
 s1[,blockgroup_id := substr(block_id, 1, 12)]
-b1 <- s1[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s1.bg <- blockgroup_sf(2010) |> 
-  left_join(b1,by=c('bg10_id'='blockgroup_id')) |> 
-  select(-c(join_type,muni_id,muni_name,cosub_cn10))
+s1.bg <- s1[,lapply(.SDcols,sum),blockgroup_id,.SDcols=(ns)] 
+s1.bg <- st_as_sf(s1.bg)
 
-st_write(s1.bg, paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_blockgroup_indicators.gpkg'), append=F)
-
+st_write(s1.bg, dsn = urbsim_gpkg, layer = 'Scenario_1_blockgroup_indicators', append=F)
 
 # Scenario 2
 
@@ -2329,20 +2336,17 @@ s2 <- fread(paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_urb
     block_id = as.character(block_id)
          ) |> 
   relocate(scenario) |>
-  right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
-  relocate(c(muni_id,muni_name,rpa_acr,mpo,geometry),.after=block_id)
+  right_join(blk10_sf, by=c('block_id'='bl10_id'))
 
-st_write(s2, paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_block_indicators.gpkg'), append=F)
+st_write(s2, dsn = urbsim_gpkg, layer = 'Scenario_2_block_indicators', append=F)
 
-ns <- names(s2)[8:ncol(s2)]
+ns <- names(s2)[4:ncol(s2)]
 setDT(s2)
 s2[,blockgroup_id := substr(block_id, 1, 12)]
-b2 <- s2[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s2.bg <- blockgroup_sf(2010) |> 
-  left_join(b2,by=c('bg10_id'='blockgroup_id')) |> 
-  select(-c(join_type,muni_id,muni_name,cosub_cn10))
+s2.bg <- s2[,lapply(.SDcols,sum),blockgroup_id,.SDcols=(ns)] 
+s2.bg <- st_as_sf(s2.bg)
 
-st_write(s2.bg, paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_blockgroup_indicators.gpkg'), append=F)
+st_write(s2.bg, dsn = urbsim_gpkg, layer = 'Scenario_2_blockgroup_indicators', append=F)
 
 ```
 

@@ -1,0 +1,281 @@
+---
+title: "Land Use Efficiency Metrics"
+format: html
+editor: visual
+---
+# 1 - Setup: paths and parameters
+
+```{r, setup, include=FALSE}
+
+pacman::p_load(
+  sf,
+  data.table,
+  tidycensus,
+  tidyverse,
+  openxlsx,
+  tidygeocoder,
+  terra,
+  reticulate
+)
+
+# devtools::install_github('MAPC/mapcdatakeys')
+library(mapcdatakeys)
+
+reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+
+# Paths
+if (grepl('VM',Sys.info()[['nodename']])){
+  base <- '//data-sync/Public/DataServices'
+} else {
+  base <- 'S:/Network Shares/K Drive/DataServices'
+}
+
+
+data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
+
+task_path = paste0(data_path,'/Task_3/')
+sp_path <- paste0(task_path,'Spatial/')
+task_gdb = paste0(sp_path, 'LandUse_Efficiency_Metrics.gdb')
+
+munis <- mapcdatakeys::all_muni_data_keys |> 
+  select(muni_id,muni_name,cosub_5y14,cosub_5y22,cmtyp08,mpo) |> 
+  mutate(cosub_5y14 = as.character(cosub_5y14),
+         cosub_5y22 = as.character(cosub_5y22))
+
+blk_2010 <- geog_xw_2010 |>
+  select(bl10_id, muni_id) |> 
+  left_join(munis, by = 'muni_id') |>
+  select(bl10_id, muni_id, muni_name, cmtyp08, mpo) |>
+  setDT()
+
+knitr::opts_knit$set(root.dir = data_path)
+```
+
+# 2 - ACS data 2014
+
+```{r}
+vars14 <- load_variables('acs5',year=2014) |> 
+  setDT()
+
+uv14 <- vars14[concept=='UNITS IN STRUCTURE', name]
+hv14 <- vars14[concept=='HOUSEHOLD TYPE BY TENURE' & label=='Estimate!!Total', name]
+pv14 <- vars14[concept=='TOTAL POPULATION', name]
+
+vs14 <- c(pv14, hv14, uv14)
+
+# Tract-level
+tract14 <- get_acs(
+  year = 2014,
+  state = 'MA',
+  survey = 'acs5',
+  variables = vs14,
+  geography = 'tract',
+  cache_table = TRUE
+) |> 
+  select(-moe,-NAME) |> 
+  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
+  setnames(c('ct10_id','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
+  mutate(units_1 = sf_attached + sf_detached,
+         units_10p = units1019+units2049+units50p) |> 
+  select(ct10_id,
+         total_pop,
+         total_households,
+         total_units,
+         units_1,
+         units_2,
+         units_3_4,
+         units_5_9,
+         units_10p) |> 
+  setorder(ct10_id) |> 
+  setDT()
+
+# Muni-level
+muni14 <- get_acs(
+  year = 2014,
+  state = 'MA',
+  survey = 'acs5',
+  variables = vs14,
+  geography = 'county subdivision',
+  cache_table = TRUE
+) |> 
+  select(-moe,-NAME) |> 
+  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
+  setnames(c('cosub_5y14','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
+  mutate(units_1 = sf_attached + sf_detached,
+         units_10p = units1019+units2049+units50p) |> 
+  select(cosub_5y14,
+         total_pop,
+         total_households,
+         total_units,
+         units_1,
+         units_2,
+         units_3_4,
+         units_5_9,
+         units_10p) |> 
+  left_join(munis, by='cosub_5y14') |> 
+  relocate(c(muni_id,muni_name,cmtyp08,mpo)) |> 
+  select(-c(cosub_5y14,cosub_5y22)) |> 
+  filter(!is.na(muni_id)) |> 
+  setorder(muni_id) |> 
+  setDT()
+  
+  
+```
+
+# 3 - ACS data 2022
+```{r}
+vars22 <- load_variables('acs5',year=2022) |> 
+  setDT()
+
+uv22 <- vars22[concept=='Units in Structure', name]
+hv22 <- vars22[concept=='Households by Type' & label=='Estimate!!Total:', name]
+pv22 <- vars22[concept=='Total Population', name]
+
+vs22 <- c(pv22, hv22, uv22)
+
+# Tract-level
+tract22 <- get_acs(
+  year = 2022,
+  state = 'MA',
+  survey = 'acs5',
+  variables = vs22,
+  geography = 'tract',
+  cache_table = TRUE
+) |> 
+  select(-moe,-NAME) |> 
+  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
+  setnames(c('ct10_id','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
+  mutate(units_1 = sf_attached + sf_detached,
+         units_10p = units1019+units2049+units50p) |> 
+  select(ct10_id,
+         total_pop,
+         total_households,
+         total_units,
+         units_1,
+         units_2,
+         units_3_4,
+         units_5_9,
+         units_10p) |> 
+  setorder(ct10_id) |> 
+  setDT()
+
+# Muni-level
+muni22 <- get_acs(
+  year = 2022,
+  state = 'MA',
+  survey = 'acs5',
+  variables = vs22,
+  geography = 'county subdivision',
+  cache_table = TRUE
+) |> 
+  select(-moe,-NAME) |> 
+  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
+  setnames(c('cosub_5y22','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
+  mutate(units_1 = sf_attached + sf_detached,
+         units_10p = units1019+units2049+units50p) |> 
+  select(cosub_5y22,
+         total_pop,
+         total_households,
+         total_units,
+         units_1,
+         units_2,
+         units_3_4,
+         units_5_9,
+         units_10p) |> 
+  left_join(munis, by='cosub_5y22') |> 
+  relocate(c(muni_id,muni_name,cmtyp08,mpo)) |> 
+  select(-c(cosub_5y14,cosub_5y22)) |> 
+  filter(!is.na(muni_id)) |> 
+  setorder(muni_id) |> 
+  setDT()
+
+```
+
+# 4 - LEHD data 2014 + 2022
+
+```{r}
+
+xw20 <- fread(paste0(data_path,'/nhgis_blk2020_blk2010_25.csv')) |> 
+  select(blk2020ge, blk2010ge, weight) |> 
+  rename(GEOID = blk2020ge,
+         block2010_geoid = blk2010ge) |> 
+  mutate(GEOID = as.character(GEOID)) |> 
+  setDT()
+
+emp14 <- lehdr::grab_lodes(state='ma',year=2014,lodes_type='wac') |>
+  select(w_geocode,C000) |>
+  setnames(c('GEOID','emp2014')) |> 
+  left_join(xw20, by='GEOID') |> 
+  mutate(emp2014 = emp2014*weight) |> 
+  group_by(block2010_geoid) |> 
+  summarize(emp2014 = round(sum(emp2014))) |> 
+  ungroup() |> 
+  rename(bl10_id = block2010_geoid) |> 
+  mutate(bl10_id = as.character(bl10_id)) |> 
+  setDT()
+
+emp22 <- lehdr::grab_lodes(state='ma',year=2022,lodes_type='wac') |>
+  select(w_geocode,C000) |>
+  setnames(c('GEOID','emp2022')) |> 
+  left_join(xw20, by='GEOID') |> 
+  mutate(emp2022 = emp2022*weight) |> 
+  group_by(block2010_geoid) |> 
+  summarize(emp2022 = round(sum(emp2022))) |> 
+  ungroup() |> 
+  rename(bl10_id = block2010_geoid) |> 
+  mutate(bl10_id = as.character(bl10_id)) |> 
+  setDT()
+
+
+emp.blk <- blk_2010 |> 
+  mutate(bl10_id = as.character(bl10_id)) |> 
+  left_join(emp14, by = 'bl10_id') |> 
+  left_join(emp22, by='bl10_id') |> 
+  setDT()
+
+emp.ct <- emp.blk |> 
+  mutate(ct10_id = substr(bl10_id,1,11)) |> 
+  group_by(ct10_id) |> 
+  summarize(
+    emp2014 = sum(emp2014),
+    emp2022 = sum(emp2022)
+  ) |> 
+  setDT()
+
+emp.muni <- emp.blk |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(
+    emp2014 = sum(emp2014),
+    emp2022 = sum(emp2022)
+  ) |> 
+  setDT()
+
+emp.cmtyp <- emp.blk |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(
+    emp2014 = sum(emp2014),
+    emp2022 = sum(emp2022)
+  ) |> 
+  setDT()
+
+emp.sw <- emp.blk |> 
+  summarize(
+    emp2014 = sum(emp2014),
+    emp2022 = sum(emp2022)
+  ) |> 
+  mutate(mpo = 'STATEWIDE') |> 
+  setDT()
+
+emp.mpo <- emp.blk |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(
+    emp2014 = sum(emp2014),
+    emp2022 = sum(emp2022)
+  ) |> 
+  rbind(emp.sw) |> 
+  setDT()
+
+
+
+
+```
