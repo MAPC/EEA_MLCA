@@ -3,6 +3,7 @@ title: "Land Use Efficiency Metrics"
 format: html
 editor: visual
 ---
+
 # 1 - Setup: paths and parameters
 
 ```{r, setup, include=FALSE}
@@ -209,6 +210,7 @@ muni14 <- get_acs(
 ```
 
 # 3 - ACS data 2023
+
 ```{r}
 
 # ct_xw <- fread(paste0(data_path, '/nhgis_bg2020_tr2010_25.csv')) |>
@@ -555,42 +557,90 @@ emp.mpo <- emp.blk |>
 # 5 - NLCD Developed Area calculation
 
 ```{r}
-msf <- muni_sf(2020) |> vect()
-ct20 <- tract_sf(2020) |> vect()
+msf <- muni_sf(2020)
+ct20 <- tract_sf(2020)
 
-nlcd2014 <- rast(paste0(sp_path,'Annual_NLCD_LndCov_2014_CU_C1V1.tif')) |> 
-  project("EPSG:26986") |> 
-  crop(msf) 
-
-nlcd2014[!nlcd2014$Annual_NLCD_LndCov_2014_CU_C1V1 %in% 21:24] <- NA
-dev2014 <- as.polygons(nlcd2014, na.rm=T, dissolve=T)
-writeVector(dev2014,
-         filename = task_gdb,
-         layer = 'nlcd_developed_area_2014',
-         filetype = "OpenFileGDB",
-         overwrite = TRUE)
+dev2014 <- st_read(dsn = task_gdb, layer='nlcd2014_developed_area') |> 
+  st_transform(crs = st_crs(msf))
 
 
-nlcd2023 <- rast(paste0('C:/Users/cgate/Desktop/Annual_NLCD_LndCov_2023_CU_C1V1.tif')) |>
-# nlcd2023 <- rast(paste0(sp_path,'/Annual_NLCD_LndCov_2023_CU_C1V1/Annual_NLCD_LndCov_2023_CU_C1V1.tif')) |> 
-  project("EPSG:26986") |> 
-  crop(msf)
+dev14_ct <- st_intersection(dev2014,ct20) %>% 
+  mutate(area_m2 = st_area(.))
+st_write(dev14_ms, dsn = task_gdb, layer = 'nlcd2014_developed_tract_inter', append=F)
 
-writeRaster(nlcd2023, paste0(sp_path,'Annual_NLCD_LndCov_2023_CU_C1V1/Annual_NLCD_LndCov_2023_CU_C1V1.tif'))
-  
-nlcd2023[!nlcd2023$`NLCD Land Cover Class` %in% 21:24] <- NA
-dev2023 <- as.polygons(nlcd2023, na.rm=T, dissolve=T)
-writeVector(dev2023,
-         filename = task_gdb,
-         layer = 'nlcd_developed_area_2023',
-         filetype = "OpenFileGDB",
-         overwrite = TRUE)
+dev14_ct <- dev14_ct |> 
+  group_by(ct20_id) |> 
+  summarize(developed_area_m2 = sum(area_m2))
+saveRDS(dev14_ct, paset0(sp_path, 'nlcd2014_dev_area_tract.rds'))
+
+dev14_ms <- st_intersection(dev2014,msf) %>% 
+  mutate(area_m2 = st_area(.))
+st_write(dev14_ms, dsn = task_gdb, layer = 'nlcd2014_developed_muni_inter', append=F)
+
+dev14_muni <- dev14_ms |> 
+  group_by(muni_id, muni_name) |> 
+  summarize(developed_area_m2 = sum(area_m2))
+saveRDS(dev14_muni, paset0(sp_path, 'nlcd2014_dev_area_muni.rds'))
+
+dev14_cmsbt <- dev14_ms |> 
+  group_by(cmsbt08) |> 
+  summarize(developed_area_m2 = sum(area_m2))
+saveRDS(dev14_cmsbt, paset0(sp_path, 'nlcd2014_dev_area_commsubtype.rds'))
+
+dev14_sw <- dev14_ms |> 
+  summarize(developed_area_m2 = sum(area_m2)) |> 
+  mutate(mpo='STATEWIDE')
+
+dev14_mpo <- dev14_ms |> 
+  group_by(mpo) |> 
+  summarize(developed_area_m2 = sum(area_m2)) |> 
+  rbind(dev14_sw)
+saveRDS(dev14_mpo, paset0(sp_path, 'nlcd2014_dev_area_mpo.rds'))
+
+# 2023 NLCD
+
+dev2023 <- st_read(dsn = task_gdb, layer='nlcd2023_developed_area') |> 
+    st_transform(crs = st_crs(msf))
+
+dev23_ct <- st_intersection(dev2023,ct20) %>% 
+  mutate(area_m2 = st_area(.))
+st_write(dev23_ms, dsn = task_gdb, layer = 'nlcd2023_developed_tract_inter', append=F)
+
+dev23_ct <- dev23_ct |> 
+  group_by(ct20_id) |> 
+  summarize(developed_area_m2 = sum(area_m2))
+saveRDS(dev23_ct, paset0(sp_path, 'nlcd2023_dev_area_tract.rds'))
+
+dev23_ms <- st_intersection(dev2023,msf) %>% 
+  mutate(area_m2 = st_area(.))
+st_write(dev23_ms, dsn = task_gdb, layer = 'nlcd2023_developed_muni_inter', append=F)
+
+dev23_muni <- dev23_ms |> 
+  group_by(muni_id, muni_name) |> 
+  summarize(developed_area_m2 = sum(area_m2))
+saveRDS(dev23_muni, paset0(sp_path, 'nlcd2023_dev_area_muni.rds'))
+
+dev23_cmsbt <- dev23_ms |> 
+  group_by(cmsbt08) |> 
+  summarize(developed_area_m2 = sum(area_m2))
+saveRDS(dev23_cmsbt, paset0(sp_path, 'nlcd2023_dev_area_commsubtype.rds'))
+
+dev23_sw <- dev23_ms |> 
+  summarize(developed_area_m2 = sum(area_m2)) |> 
+  mutate(mpo='STATEWIDE')
+
+dev23_mpo <- dev23_ms |> 
+  group_by(mpo) |> 
+  summarize(developed_area_m2 = sum(area_m2)) |> 
+  rbind(dev23_sw)
+saveRDS(dev23_mpo, paset0(sp_path, 'nlcd2023_dev_area_mpo.rds'))
+
 
 ```
 
 # 6 - Parcels land use codes and area
 
-## 6a - Parcels combined for <=2014
+## 6a - Parcels combined for \<=2014
 
 ```{r}
 msf <- mapcdatakeys::muni_sf(2020) |> 
@@ -715,7 +765,8 @@ st_write(m14, dsn = delta_gdb, layer = 'parcels_combine_2014', append=F)
 
 ```
 
-## 6b - Parcels combined for >=2022
+## 6b - Parcels combined for \>=2022
+
 ```{r}
 
 msf <- mapcdatakeys::muni_sf(2020) |> 
@@ -857,7 +908,6 @@ m22 <- m22 %>%
 st_write(m22, dsn = delta_gdb, layer = 'parcels_combine_2022', append=F)
 
 ```
-
 
 # 7 - Calculate residential and commercial parcel area
 
