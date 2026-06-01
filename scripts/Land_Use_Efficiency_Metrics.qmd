@@ -21,7 +21,7 @@ pacman::p_load(
 # devtools::install_github('MAPC/mapcdatakeys')
 library(mapcdatakeys)
 
-reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+# reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
 
 # Paths
 if (grepl('VM',Sys.info()[['nodename']])){
@@ -32,20 +32,28 @@ if (grepl('VM',Sys.info()[['nodename']])){
 
 
 data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
-
 task_path = paste0(data_path,'/Task_3/')
 sp_path <- paste0(task_path,'Spatial/')
 task_gdb = paste0(sp_path, 'LandUse_Efficiency_Metrics.gdb')
 
-munis <- mapcdatakeys::all_muni_data_keys |> 
-  select(muni_id,muni_name,cosub_5y14,cosub_5y22,cmtyp08,mpo) |> 
-  mutate(cosub_5y14 = as.character(cosub_5y14),
-         cosub_5y22 = as.character(cosub_5y22))
+parcel_root <- paste0(base,'/Datasets/Parcel_DB/Data/parcel_timeseries')
+assess_path <- file.path(parcel_root,'_Assess_CSVs')
+poly_gdb <- paste0(parcel_root,"/_Merged_polys/All_parcel_polys.gdb")
+comp_gdb <- paste0(parcel_root,"/_Merged_polys/Assess_joined_parcel_polys.gdb")
+delta_gdb <- paste0(parcel_root,"/_Merged_polys/Delta_parcel_polys.gdb")
+year_gpkg <- paste0(parcel_root,"/_Merged_polys/parcels_by_year.gpkg")
+muni_gpkg <- paste0(parcel_root,"/_Merged_polys/parcels_by_muni_timeseries.gpkg")
 
-blk_2010 <- geog_xw_2010 |>
-  select(bl10_id, muni_id) |> 
+
+munis <- mapcdatakeys::all_muni_data_keys |> 
+  select(muni_id,muni_name,cosub_5y14,cosub_5y23,cmsbt08,mpo) |> 
+  mutate(cosub_5y14 = as.character(cosub_5y14),
+         cosub_5y23 = as.character(cosub_5y23))
+
+blk_2020 <- geog_xw_2020 |>
+  select(bl20_id, muni_id) |> 
   left_join(munis, by = 'muni_id') |>
-  select(bl10_id, muni_id, muni_name, cmtyp08, mpo) |>
+  select(bl20_id, muni_id, muni_name, cmsbt08, mpo) |>
   setDT()
 
 knitr::opts_knit$set(root.dir = data_path)
@@ -54,12 +62,21 @@ knitr::opts_knit$set(root.dir = data_path)
 # 2 - ACS data 2014
 
 ```{r}
-vars14 <- load_variables('acs5',year=2014) |> 
+
+
+# NEED TO SWITCH TO 2020 TRACT + MUNI GEOGRAPHIES for the 2014 data
+# AND SWITCH BACK THE 2023 DATA to 2020 tracts as well
+ct_xw <- fread(paste0(data_path, '/nhgis_bg2010_tr2020_25.csv')) |>
+  mutate(bg2010ge = as.character(bg2010ge))
+
+
+vars14 <- load_variables('acs5', year = 2014) |>
   setDT()
 
-uv14 <- vars14[concept=='UNITS IN STRUCTURE', name]
-hv14 <- vars14[concept=='HOUSEHOLD TYPE BY TENURE' & label=='Estimate!!Total', name]
-pv14 <- vars14[concept=='TOTAL POPULATION', name]
+uv14 <- vars14[concept == 'UNITS IN STRUCTURE', name]
+hv14 <- vars14[concept == 'HOUSEHOLD TYPE BY TENURE' &
+                 label == 'Estimate!!Total', name]
+pv14 <- vars14[concept == 'TOTAL POPULATION', name]
 
 vs14 <- c(pv14, hv14, uv14)
 
@@ -69,24 +86,70 @@ tract14 <- get_acs(
   state = 'MA',
   survey = 'acs5',
   variables = vs14,
-  geography = 'tract',
+  geography = 'block group',
   cache_table = TRUE
-) |> 
-  select(-moe,-NAME) |> 
-  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
-  setnames(c('ct10_id','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
-  mutate(units_1 = sf_attached + sf_detached,
-         units_10p = units1019+units2049+units50p) |> 
-  select(ct10_id,
-         total_pop,
-         total_households,
-         total_units,
-         units_1,
-         units_2,
-         units_3_4,
-         units_5_9,
-         units_10p) |> 
-  setorder(ct10_id) |> 
+) |>
+  select(-moe, -NAME) |>
+  pivot_wider(id_cols = 'GEOID',
+              names_from = 'variable',
+              values_from = 'estimate') |>
+  setnames(
+    c(
+      'bg2010ge',
+      'total_pop',
+      'total_households',
+      'total_units',
+      'sf_detached',
+      'sf_attached',
+      'units_2',
+      'units_3_4',
+      'units_5_9',
+      'units1019',
+      'units2049',
+      'units50p',
+      'mobilehome',
+      'RV_boat'
+    )
+  ) |>
+  mutate(
+    units_1 = sf_attached + sf_detached + mobilehome,
+    units_10p = units1019 + units2049 + units50p
+  ) |>
+  select(
+    bg2010ge,
+    total_pop,
+    total_households,
+    total_units,
+    units_1,
+    units_2,
+    units_3_4,
+    units_5_9,
+    units_10p
+  ) |>
+  left_join(ct_xw, by = 'bg2010ge') |>
+  mutate(
+    total_pop = (total_pop * wt_pop),
+    total_households = (total_households * wt_hh),
+    total_units = (total_units * wt_hu),
+    units_1 = (units_1 * wt_hu),
+    units_2 = (units_2 * wt_hu),
+    units_3_4 = (units_3_4 * wt_hu),
+    units_5_9 = (units_5_9 * wt_hu),
+    units_10p = (units_10p * wt_hu),
+  ) |>
+  rename(ct20_id = tr2020ge) |>
+  group_by(ct20_id) |>
+  summarize(
+    total_pop = round(sum(total_pop)),
+    total_households = round(sum(total_households)),
+    total_units = round(sum(total_units)),
+    units_1 = round(sum(units_1)),
+    units_2 = round(sum(units_2)),
+    units_3_4 = round(sum(units_3_4)),
+    units_5_9 = round(sum(units_5_9)),
+    units_10p = round(sum(units_10p))
+  ) |>
+  setorder(ct20_id) |>
   setDT()
 
 # Muni-level
@@ -97,185 +160,814 @@ muni14 <- get_acs(
   variables = vs14,
   geography = 'county subdivision',
   cache_table = TRUE
-) |> 
-  select(-moe,-NAME) |> 
-  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
-  setnames(c('cosub_5y14','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
-  mutate(units_1 = sf_attached + sf_detached,
-         units_10p = units1019+units2049+units50p) |> 
-  select(cosub_5y14,
-         total_pop,
-         total_households,
-         total_units,
-         units_1,
-         units_2,
-         units_3_4,
-         units_5_9,
-         units_10p) |> 
-  left_join(munis, by='cosub_5y14') |> 
-  relocate(c(muni_id,muni_name,cmtyp08,mpo)) |> 
-  select(-c(cosub_5y14,cosub_5y22)) |> 
-  filter(!is.na(muni_id)) |> 
-  setorder(muni_id) |> 
+) |>
+  select(-moe, -NAME) |>
+  pivot_wider(id_cols = 'GEOID',
+              names_from = 'variable',
+              values_from = 'estimate') |>
+  setnames(
+    c(
+      'cosub_5y14',
+      'total_pop',
+      'total_households',
+      'total_units',
+      'sf_detached',
+      'sf_attached',
+      'units_2',
+      'units_3_4',
+      'units_5_9',
+      'units1019',
+      'units2049',
+      'units50p',
+      'mobilehome',
+      'RV_boat'
+    )
+  ) |>
+  mutate(
+    units_1 = sf_attached + sf_detached + mobilehome,
+    units_10p = units1019 + units2049 + units50p
+  ) |>
+  select(
+    cosub_5y14,
+    total_pop,
+    total_households,
+    total_units,
+    units_1,
+    units_2,
+    units_3_4,
+    units_5_9,
+    units_10p
+  ) |>
+  left_join(munis, by = 'cosub_5y14') |>
+  relocate(c(muni_id, muni_name, cmsbt08, mpo)) |>
+  select(-c(cosub_5y14, cosub_5y23)) |>
+  filter(!is.na(muni_id)) |>
+  setorder(muni_id) |>
   setDT()
-  
+
   
 ```
 
-# 3 - ACS data 2022
+# 3 - ACS data 2023
 ```{r}
-vars22 <- load_variables('acs5',year=2022) |> 
+
+# ct_xw <- fread(paste0(data_path, '/nhgis_bg2020_tr2010_25.csv')) |>
+#   mutate(bg2020ge = as.character(bg2020ge))
+
+vars23 <- load_variables('acs5', year = 2023) |>
   setDT()
 
-uv22 <- vars22[concept=='Units in Structure', name]
-hv22 <- vars22[concept=='Households by Type' & label=='Estimate!!Total:', name]
-pv22 <- vars22[concept=='Total Population', name]
+uv23 <- vars23[concept == 'Units in Structure', name]
+hv23 <- vars23[concept == 'Households by Type' &
+                 label == 'Estimate!!Total:', name]
+pv23 <- vars23[concept == 'Total Population', name]
 
-vs22 <- c(pv22, hv22, uv22)
+vs23 <- c(pv23, hv23, uv23)
 
 # Tract-level
-tract22 <- get_acs(
-  year = 2022,
+tract23 <- get_acs(
+  year = 2023,
   state = 'MA',
   survey = 'acs5',
-  variables = vs22,
+  variables = vs23,
   geography = 'tract',
   cache_table = TRUE
-) |> 
-  select(-moe,-NAME) |> 
-  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
-  setnames(c('ct10_id','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
-  mutate(units_1 = sf_attached + sf_detached,
-         units_10p = units1019+units2049+units50p) |> 
-  select(ct10_id,
-         total_pop,
-         total_households,
-         total_units,
-         units_1,
-         units_2,
-         units_3_4,
-         units_5_9,
-         units_10p) |> 
-  setorder(ct10_id) |> 
+) |>
+  select(-moe, -NAME) |>
+  pivot_wider(id_cols = 'GEOID',
+              names_from = 'variable',
+              values_from = 'estimate') |>
+  setnames(
+    c(
+      'ct20_id',
+      'total_pop',
+      'total_households',
+      'total_units',
+      'sf_detached',
+      'sf_attached',
+      'units_2',
+      'units_3_4',
+      'units_5_9',
+      'units1019',
+      'units2049',
+      'units50p',
+      'mobilehome',
+      'RV_boat'
+    )
+  ) |>
+  mutate(
+    units_1 = sf_attached + sf_detached + mobilehome,
+    units_10p = units1019 + units2049 + units50p
+  ) |>
+  select(
+    ct20_id,
+    total_pop,
+    total_households,
+    total_units,
+    units_1,
+    units_2,
+    units_3_4,
+    units_5_9,
+    units_10p
+  ) |>
+  setorder(ct20_id) |>
   setDT()
 
 # Muni-level
-muni22 <- get_acs(
-  year = 2022,
+muni24 <- get_acs(
+  year = 2023,
   state = 'MA',
   survey = 'acs5',
-  variables = vs22,
+  variables = vs23,
   geography = 'county subdivision',
   cache_table = TRUE
-) |> 
-  select(-moe,-NAME) |> 
-  pivot_wider(id_cols = 'GEOID', names_from = 'variable', values_from = 'estimate') |>
-  setnames(c('cosub_5y22','total_pop','total_households','total_units','sf_detached','sf_attached','units_2','units_3_4','units_5_9','units1019','units2049','units50p','mobilehome','RV_boat')) |> 
-  mutate(units_1 = sf_attached + sf_detached,
-         units_10p = units1019+units2049+units50p) |> 
-  select(cosub_5y22,
-         total_pop,
-         total_households,
-         total_units,
-         units_1,
-         units_2,
-         units_3_4,
-         units_5_9,
-         units_10p) |> 
-  left_join(munis, by='cosub_5y22') |> 
-  relocate(c(muni_id,muni_name,cmtyp08,mpo)) |> 
-  select(-c(cosub_5y14,cosub_5y22)) |> 
-  filter(!is.na(muni_id)) |> 
-  setorder(muni_id) |> 
+) |>
+  select(-moe, -NAME) |>
+  pivot_wider(id_cols = 'GEOID',
+              names_from = 'variable',
+              values_from = 'estimate') |>
+  setnames(
+    c(
+      'cosub_5y23',
+      'total_pop',
+      'total_households',
+      'total_units',
+      'sf_detached',
+      'sf_attached',
+      'units_2',
+      'units_3_4',
+      'units_5_9',
+      'units1019',
+      'units2049',
+      'units50p',
+      'mobilehome',
+      'RV_boat'
+    )
+  ) |>
+  mutate(
+    units_1 = sf_attached + sf_detached + mobilehome,
+    units_10p = units1019 + units2049 + units50p
+  ) |>
+  select(
+    cosub_5y23,
+    total_pop,
+    total_households,
+    total_units,
+    units_1,
+    units_2,
+    units_3_4,
+    units_5_9,
+    units_10p
+  ) |>
+  left_join(munis, by = 'cosub_5y23') |>
+  relocate(c(muni_id, muni_name, cmsbt08, mpo)) |>
+  select(-c(cosub_5y14, cosub_5y23)) |>
+  filter(!is.na(muni_id)) |>
+  setorder(muni_id) |>
   setDT()
 
 ```
 
-# 4 - LEHD data 2014 + 2022
+# 4 - LEHD data 2014 + 2023
 
 ```{r}
 
-xw20 <- fread(paste0(data_path,'/nhgis_blk2020_blk2010_25.csv')) |> 
-  select(blk2020ge, blk2010ge, weight) |> 
-  rename(GEOID = blk2020ge,
-         block2010_geoid = blk2010ge) |> 
-  mutate(GEOID = as.character(GEOID)) |> 
+emp14 <- lehdr::grab_lodes(state = 'ma',
+                           year = 2014,
+                           lodes_type = 'wac') |>
+  mutate(
+    emp_2014_sect_1 = CNS04,
+    emp_2014_sect_2 = CNS15 + CNS16,
+    emp_2014_sect_3 = CNS10 + CNS11,
+    emp_2014_sect_4 = CNS20,
+    emp_2014_sect_5 = CNS09,
+    emp_2014_sect_6 = CNS07 + CNS17 + CNS18,
+    emp_2014_sect_7 = CNS05,
+    emp_2014_sect_8 = CNS01 + CNS02 + CNS19,
+    emp_2014_sect_9 = CNS12 + CNS13 + CNS14,
+    emp_2014_sect_10 = CNS03 + CNS06 + CNS08
+  ) |>
+  select(
+    w_geocode,
+    C000,
+    emp_2014_sect_1,
+    emp_2014_sect_2,
+    emp_2014_sect_3,
+    emp_2014_sect_4,
+    emp_2014_sect_5,
+    emp_2014_sect_6,
+    emp_2014_sect_7,
+    emp_2014_sect_8,
+    emp_2014_sect_9,
+    emp_2014_sect_10
+  ) |>
+  rename(bl20_id = w_geocode, emp_2014 = C000) |>
+  mutate(bl20_id = as.character(bl20_id)) |>
   setDT()
 
-emp14 <- lehdr::grab_lodes(state='ma',year=2014,lodes_type='wac') |>
-  select(w_geocode,C000) |>
-  setnames(c('GEOID','emp2014')) |> 
-  left_join(xw20, by='GEOID') |> 
-  mutate(emp2014 = emp2014*weight) |> 
-  group_by(block2010_geoid) |> 
-  summarize(emp2014 = round(sum(emp2014))) |> 
-  ungroup() |> 
-  rename(bl10_id = block2010_geoid) |> 
-  mutate(bl10_id = as.character(bl10_id)) |> 
+emp23 <- lehdr::grab_lodes(state = 'ma',
+                           year = 2023,
+                           lodes_type = 'wac') |>
+  mutate(
+    emp_2023_sect_1 = CNS04,
+    emp_2023_sect_2 = CNS15 + CNS16,
+    emp_2023_sect_3 = CNS10 + CNS11,
+    emp_2023_sect_4 = CNS20,
+    emp_2023_sect_5 = CNS09,
+    emp_2023_sect_6 = CNS07 + CNS17 + CNS18,
+    emp_2023_sect_7 = CNS05,
+    emp_2023_sect_8 = CNS01 + CNS02 + CNS19,
+    emp_2023_sect_9 = CNS12 + CNS13 + CNS14,
+    emp_2023_sect_10 = CNS03 + CNS06 + CNS08
+  ) |>
+  select(
+    w_geocode,
+    C000,
+    emp_2023_sect_1,
+    emp_2023_sect_2,
+    emp_2023_sect_3,
+    emp_2023_sect_4,
+    emp_2023_sect_5,
+    emp_2023_sect_6,
+    emp_2023_sect_7,
+    emp_2023_sect_8,
+    emp_2023_sect_9,
+    emp_2023_sect_10
+  ) |>
+  rename(bl20_id = w_geocode, emp_2023 = C000) |>
+  mutate(bl20_id = as.character(bl20_id)) |> 
   setDT()
 
-emp22 <- lehdr::grab_lodes(state='ma',year=2022,lodes_type='wac') |>
-  select(w_geocode,C000) |>
-  setnames(c('GEOID','emp2022')) |> 
-  left_join(xw20, by='GEOID') |> 
-  mutate(emp2022 = emp2022*weight) |> 
-  group_by(block2010_geoid) |> 
-  summarize(emp2022 = round(sum(emp2022))) |> 
-  ungroup() |> 
-  rename(bl10_id = block2010_geoid) |> 
-  mutate(bl10_id = as.character(bl10_id)) |> 
-  setDT()
 
-
-emp.blk <- blk_2010 |> 
-  mutate(bl10_id = as.character(bl10_id)) |> 
-  left_join(emp14, by = 'bl10_id') |> 
-  left_join(emp22, by='bl10_id') |> 
+emp.blk <- blk_2020 |> 
+  mutate(bl20_id = as.character(bl20_id)) |> 
+  left_join(emp14, by = 'bl20_id') |> 
+  left_join(emp23, by='bl20_id') |> 
   setDT()
 
 emp.ct <- emp.blk |> 
-  mutate(ct10_id = substr(bl10_id,1,11)) |> 
-  group_by(ct10_id) |> 
+  mutate(ct20_id = substr(bl20_id,1,11)) |> 
+  group_by(ct20_id) |> 
   summarize(
-    emp2014 = sum(emp2014),
-    emp2022 = sum(emp2022)
+    emp2014 = sum(emp_2014),
+    emp2023 = sum(emp_2023),
+    emp_2014_sect_1 = sum(emp_2014_sect_1),
+    emp_2014_sect_2 = sum(emp_2014_sect_2),
+    emp_2014_sect_3 = sum(emp_2014_sect_3),
+    emp_2014_sect_4 = sum(emp_2014_sect_4),
+    emp_2014_sect_5 = sum(emp_2014_sect_5),
+    emp_2014_sect_6 = sum(emp_2014_sect_6),
+    emp_2014_sect_7 = sum(emp_2014_sect_7),
+    emp_2014_sect_8 = sum(emp_2014_sect_8),
+    emp_2014_sect_9 = sum(emp_2014_sect_9),
+    emp_2014_sect_10 = sum(emp_2014_sect_10),
+    emp_2023_sect_1 = sum(emp_2023_sect_1),
+    emp_2023_sect_2 = sum(emp_2023_sect_2),
+    emp_2023_sect_3 = sum(emp_2023_sect_3),
+    emp_2023_sect_4 = sum(emp_2023_sect_4),
+    emp_2023_sect_5 = sum(emp_2023_sect_5),
+    emp_2023_sect_6 = sum(emp_2023_sect_6),
+    emp_2023_sect_7 = sum(emp_2023_sect_7),
+    emp_2023_sect_8 = sum(emp_2023_sect_8),
+    emp_2023_sect_9 = sum(emp_2023_sect_9),
+    emp_2023_sect_10 = sum(emp_2023_sect_10)
   ) |> 
   setDT()
 
 emp.muni <- emp.blk |> 
   group_by(muni_id,muni_name) |> 
   summarize(
-    emp2014 = sum(emp2014),
-    emp2022 = sum(emp2022)
+    emp2014 = sum(emp_2014),
+    emp2023 = sum(emp_2023),
+    emp_2014_sect_1 = sum(emp_2014_sect_1),
+    emp_2014_sect_2 = sum(emp_2014_sect_2),
+    emp_2014_sect_3 = sum(emp_2014_sect_3),
+    emp_2014_sect_4 = sum(emp_2014_sect_4),
+    emp_2014_sect_5 = sum(emp_2014_sect_5),
+    emp_2014_sect_6 = sum(emp_2014_sect_6),
+    emp_2014_sect_7 = sum(emp_2014_sect_7),
+    emp_2014_sect_8 = sum(emp_2014_sect_8),
+    emp_2014_sect_9 = sum(emp_2014_sect_9),
+    emp_2014_sect_10 = sum(emp_2014_sect_10),
+    emp_2023_sect_1 = sum(emp_2023_sect_1),
+    emp_2023_sect_2 = sum(emp_2023_sect_2),
+    emp_2023_sect_3 = sum(emp_2023_sect_3),
+    emp_2023_sect_4 = sum(emp_2023_sect_4),
+    emp_2023_sect_5 = sum(emp_2023_sect_5),
+    emp_2023_sect_6 = sum(emp_2023_sect_6),
+    emp_2023_sect_7 = sum(emp_2023_sect_7),
+    emp_2023_sect_8 = sum(emp_2023_sect_8),
+    emp_2023_sect_9 = sum(emp_2023_sect_9),
+    emp_2023_sect_10 = sum(emp_2023_sect_10)
   ) |> 
   setDT()
 
-emp.cmtyp <- emp.blk |> 
-  group_by(muni_id,muni_name) |> 
+emp.cmsbt <- emp.blk |> 
+  group_by(cmsbt08) |> 
   summarize(
-    emp2014 = sum(emp2014),
-    emp2022 = sum(emp2022)
+    emp2014 = sum(emp_2014),
+    emp2023 = sum(emp_2023),
+    emp_2014_sect_1 = sum(emp_2014_sect_1),
+    emp_2014_sect_2 = sum(emp_2014_sect_2),
+    emp_2014_sect_3 = sum(emp_2014_sect_3),
+    emp_2014_sect_4 = sum(emp_2014_sect_4),
+    emp_2014_sect_5 = sum(emp_2014_sect_5),
+    emp_2014_sect_6 = sum(emp_2014_sect_6),
+    emp_2014_sect_7 = sum(emp_2014_sect_7),
+    emp_2014_sect_8 = sum(emp_2014_sect_8),
+    emp_2014_sect_9 = sum(emp_2014_sect_9),
+    emp_2014_sect_10 = sum(emp_2014_sect_10),
+    emp_2023_sect_1 = sum(emp_2023_sect_1),
+    emp_2023_sect_2 = sum(emp_2023_sect_2),
+    emp_2023_sect_3 = sum(emp_2023_sect_3),
+    emp_2023_sect_4 = sum(emp_2023_sect_4),
+    emp_2023_sect_5 = sum(emp_2023_sect_5),
+    emp_2023_sect_6 = sum(emp_2023_sect_6),
+    emp_2023_sect_7 = sum(emp_2023_sect_7),
+    emp_2023_sect_8 = sum(emp_2023_sect_8),
+    emp_2023_sect_9 = sum(emp_2023_sect_9),
+    emp_2023_sect_10 = sum(emp_2023_sect_10)
   ) |> 
   setDT()
 
 emp.sw <- emp.blk |> 
   summarize(
-    emp2014 = sum(emp2014),
-    emp2022 = sum(emp2022)
+    emp2014 = sum(emp_2014),
+    emp2023 = sum(emp_2023),
+    emp_2014_sect_1 = sum(emp_2014_sect_1),
+    emp_2014_sect_2 = sum(emp_2014_sect_2),
+    emp_2014_sect_3 = sum(emp_2014_sect_3),
+    emp_2014_sect_4 = sum(emp_2014_sect_4),
+    emp_2014_sect_5 = sum(emp_2014_sect_5),
+    emp_2014_sect_6 = sum(emp_2014_sect_6),
+    emp_2014_sect_7 = sum(emp_2014_sect_7),
+    emp_2014_sect_8 = sum(emp_2014_sect_8),
+    emp_2014_sect_9 = sum(emp_2014_sect_9),
+    emp_2014_sect_10 = sum(emp_2014_sect_10),
+    emp_2023_sect_1 = sum(emp_2023_sect_1),
+    emp_2023_sect_2 = sum(emp_2023_sect_2),
+    emp_2023_sect_3 = sum(emp_2023_sect_3),
+    emp_2023_sect_4 = sum(emp_2023_sect_4),
+    emp_2023_sect_5 = sum(emp_2023_sect_5),
+    emp_2023_sect_6 = sum(emp_2023_sect_6),
+    emp_2023_sect_7 = sum(emp_2023_sect_7),
+    emp_2023_sect_8 = sum(emp_2023_sect_8),
+    emp_2023_sect_9 = sum(emp_2023_sect_9),
+    emp_2023_sect_10 = sum(emp_2023_sect_10)
   ) |> 
   mutate(mpo = 'STATEWIDE') |> 
   setDT()
 
 emp.mpo <- emp.blk |> 
-  group_by(muni_id,muni_name) |> 
+  group_by(mpo) |> 
   summarize(
-    emp2014 = sum(emp2014),
-    emp2022 = sum(emp2022)
+    emp2014 = sum(emp_2014),
+    emp2023 = sum(emp_2023),
+    emp_2014_sect_1 = sum(emp_2014_sect_1),
+    emp_2014_sect_2 = sum(emp_2014_sect_2),
+    emp_2014_sect_3 = sum(emp_2014_sect_3),
+    emp_2014_sect_4 = sum(emp_2014_sect_4),
+    emp_2014_sect_5 = sum(emp_2014_sect_5),
+    emp_2014_sect_6 = sum(emp_2014_sect_6),
+    emp_2014_sect_7 = sum(emp_2014_sect_7),
+    emp_2014_sect_8 = sum(emp_2014_sect_8),
+    emp_2014_sect_9 = sum(emp_2014_sect_9),
+    emp_2014_sect_10 = sum(emp_2014_sect_10),
+    emp_2023_sect_1 = sum(emp_2023_sect_1),
+    emp_2023_sect_2 = sum(emp_2023_sect_2),
+    emp_2023_sect_3 = sum(emp_2023_sect_3),
+    emp_2023_sect_4 = sum(emp_2023_sect_4),
+    emp_2023_sect_5 = sum(emp_2023_sect_5),
+    emp_2023_sect_6 = sum(emp_2023_sect_6),
+    emp_2023_sect_7 = sum(emp_2023_sect_7),
+    emp_2023_sect_8 = sum(emp_2023_sect_8),
+    emp_2023_sect_9 = sum(emp_2023_sect_9),
+    emp_2023_sect_10 = sum(emp_2023_sect_10)
   ) |> 
   rbind(emp.sw) |> 
   setDT()
 
 
 
+
+```
+
+# 5 - NLCD Developed Area calculation
+
+```{r}
+msf <- muni_sf(2020) |> vect()
+ct20 <- tract_sf(2020) |> vect()
+
+nlcd2014 <- rast(paste0(sp_path,'Annual_NLCD_LndCov_2014_CU_C1V1.tif')) |> 
+  project("EPSG:26986") |> 
+  crop(msf) 
+
+nlcd2014[!nlcd2014$Annual_NLCD_LndCov_2014_CU_C1V1 %in% 21:24] <- NA
+dev2014 <- as.polygons(nlcd2014, na.rm=T, dissolve=T)
+writeVector(dev2014,
+         filename = task_gdb,
+         layer = 'nlcd_developed_area_2014',
+         filetype = "OpenFileGDB",
+         overwrite = TRUE)
+
+
+nlcd2023 <- rast(paste0('C:/Users/cgate/Desktop/Annual_NLCD_LndCov_2023_CU_C1V1.tif')) |>
+# nlcd2023 <- rast(paste0(sp_path,'/Annual_NLCD_LndCov_2023_CU_C1V1/Annual_NLCD_LndCov_2023_CU_C1V1.tif')) |> 
+  project("EPSG:26986") |> 
+  crop(msf)
+
+writeRaster(nlcd2023, paste0(sp_path,'Annual_NLCD_LndCov_2023_CU_C1V1/Annual_NLCD_LndCov_2023_CU_C1V1.tif'))
+  
+nlcd2023[!nlcd2023$`NLCD Land Cover Class` %in% 21:24] <- NA
+dev2023 <- as.polygons(nlcd2023, na.rm=T, dissolve=T)
+writeVector(dev2023,
+         filename = task_gdb,
+         layer = 'nlcd_developed_area_2023',
+         filetype = "OpenFileGDB",
+         overwrite = TRUE)
+
+```
+
+# 6 - Parcels land use codes and area
+
+## 6a - Parcels combined for <=2014
+
+```{r}
+msf <- mapcdatakeys::muni_sf(2020) |> 
+  select(muni_name,geometry)
+
+m14 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2014')
+
+na14 <- m14 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2014) |> 
+  select(-muni_name)
+
+m14 <- m14 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na14) |> 
+  mutate(SUMYEAR=2014)
+
+city2014 <- unique(m14$CITY)
+
+m13 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2013') 
+na13 <- m13 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2013) |> 
+  select(-muni_name)
+
+m13 <- m13 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na13)|> 
+  filter(!CITY %in% city2014) |> 
+  mutate(SUMYEAR = 2014)
+
+m14 <- rbind(m14,m13)
+city2014 <- unique(m14$CITY)
+
+m12 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2012') 
+na12 <- m12 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2012) |> 
+  select(-muni_name)
+
+m12 <- m12 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na12)|> 
+  filter(!CITY %in% city2014) |> 
+  mutate(SUMYEAR = 2014)
+
+m14 <- rbind(m14,m12)
+city2014 <- unique(m14$CITY)
+
+m11 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2011') 
+na11 <- m11 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2011) |> 
+  select(-muni_name)
+
+m11 <- m11 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na11)|> 
+  filter(!CITY %in% city2014) |> 
+  mutate(SUMYEAR = 2014)
+
+m14 <- rbind(m14,m11)
+city2014 <- unique(m14$CITY)
+
+
+m10 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2010') 
+na10 <- m10 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2010) |> 
+  select(-muni_name)
+
+m10 <- m10 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na11)|> 
+  filter(!CITY %in% city2014) |> 
+  mutate(SUMYEAR = 2014)
+
+m14 <- rbind(m14,m10)
+
+# Boston and Nantucket have minimum years > 2014
+m16 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2016')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+na16 <- m16 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2016) |> 
+  select(-muni_name)
+m16 <- m16 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na16) |> 
+  filter(CITY == 'Nantucket') |> 
+  mutate(SUMYEAR=2014) |> 
+  rename(SHAPE=geom)
+
+m20 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2020')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+na20 <- m20 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2020) |> 
+  select(-muni_name)
+m20 <- m20 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na20) |> 
+  filter(CITY == 'Boston') |> 
+  mutate(SUMYEAR=2014) |> 
+  rename(SHAPE=geom)
+
+m14 <- rbind(m14,m20,m16) %>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+st_write(m14, dsn = delta_gdb, layer = 'parcels_combine_2014', append=F)
+
+
+```
+
+## 6b - Parcels combined for >=2022
+```{r}
+
+msf <- mapcdatakeys::muni_sf(2020) |> 
+  select(muni_name,geometry)
+
+#2022
+m22 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2022')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+na22 <- m22 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2022) |> 
+  select(-muni_name)
+
+m22 <- m22 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na22) |> 
+  mutate(SUMYEAR=2022)
+
+city2022 <- unique(m22$CITY)
+
+#2023
+m23 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2023')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+na23 <- m23 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2023) |> 
+  select(-muni_name)
+
+m23 <- m23 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na23) |> 
+  filter(!CITY %in% city2022) |> 
+  mutate(SUMYEAR=2022)
+
+m22 <- rbind(m22,m23)
+city2022 <- unique(m22$CITY)
+
+#2024
+m24 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2024')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+na24 <- m24 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2024) |> 
+  select(-muni_name)
+
+m24 <- m24 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na24) |> 
+  filter(!CITY %in% city2022) |> 
+  mutate(SUMYEAR=2022)
+
+m22 <- rbind(m22,m24)
+city2022 <- unique(m22$CITY)
+
+#2025
+m25 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2025')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+na25 <- m25 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2025) |> 
+  select(-muni_name)
+
+m25 <- m25 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na25) |> 
+  filter(!CITY %in% city2022) |> 
+  mutate(SUMYEAR=2022)
+
+m22 <- rbind(m22,m25)
+city2022 <- unique(m22$CITY)
+
+#2026
+m26 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2026')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+na26 <- m26 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2026) |> 
+  select(-muni_name)
+
+m26 <- m26 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na26) |> 
+  filter(!CITY %in% city2022) |> 
+  mutate(SUMYEAR=2022)
+
+m22 <- rbind(m22,m26)
+city2022 <- unique(m22$CITY)
+
+# Two towns with pre-2022 data only
+m19 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2019')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+na19 <- m19 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2019) |> 
+  select(-muni_name)
+m19 <- m19 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na19) |> 
+  filter(CITY == 'Pelham') |> 
+  mutate(SUMYEAR=2022)
+
+m18 <- st_read(dsn = year_gpkg, layer = 'muni_parcels_2018')%>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+na18 <- m18 |> filter(is.na(CITY)) |> 
+  st_join(msf, join=st_within, left = T, largest=T) |> 
+  mutate(CITY = muni_name,
+         YEAR = 2018) |> 
+  select(-muni_name)
+m18 <- m18 |> 
+  filter(!is.na(CITY)) |> 
+  rbind(na18) |> 
+  filter(CITY == 'Chatham') |> 
+  mutate(SUMYEAR=2022)
+
+# Final compilation
+m22 <- rbind(m22,m19,m18)
+m22 <- m22 %>% 
+  st_make_valid(.) %>%
+  st_cast(., "MULTIPOLYGON")
+
+st_write(m22, dsn = delta_gdb, layer = 'parcels_combine_2022', append=F)
+
+```
+
+
+# 7 - Calculate residential and commercial parcel area
+
+```{r}
+
+ct20 <- mapcdatakeys::tract_sf(2020)
+msf <- mapcdatakeys::muni_sf(2020) |> 
+  left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,cmsbt08), by = 'muni_id')
+
+res.codes <- c(10,12,13,14,16,17,18,19,61,71,81,91,945,959,970,973,100:131,133:139,150:199)
+com.codes <- c(13,14,23,30,31,32,34,35,36,37,38,39,40,41,42,43,45,46,47,48,49,63,64,73,74,83,93,94,140,220,300:393,400:442,917,927,940:943,955:957,960:969)
+
+# 2014 layers
+m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014') |> 
+  mutate(
+    parcel_type = case_when(
+      MIN_LUCA %in% as.character(res.codes) ~ 'RES',
+      MIN_LUCA %in% as.character(com.codes) ~ 'COM'    
+    )
+  )
+
+res14 <- m14 |> 
+  filter(parcel_type == 'RES') |> 
+  select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
+  rename(parcel_area_m2 = Shape_Area)
+
+res14_ct <- st_intersection(res14,ct20) %>%
+  st_make_valid(.) %>%
+  st_cast(., 'MULTIPOLYGON')
+
+ct_res14_area <- res14_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(ct20_id) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(ct_res14_area, dsn=task_gdb, layer='tract_residential_parcel_area_2014')
+
+res14_muni <- st_intersection(res14, msf)
+
+muni_res14_area <- res14_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(muni_res14_area, dsn=task_gdb, layer='muni_residential_parcel_area_2014')
+
+cmsubtyp_res14_area <- res14_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(cmsbt08) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(cmsubtyp_res14_area, dsn=task_gdb, layer='community_subtype_residential_parcel_area_2014')
+
+sw_res14_area <- res14_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  summarize(res_area_m2 = sum(area_m2)) |> 
+  mutate(mpo = 'STATEWIDE')
+
+mpo_res14_area <- res14_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(mpo) |> 
+  summarize(res_area_m2 = sum(area_m2)) |> 
+  rbind(sw_res14_area)
+st_write(mpo_res14_area, dsn=task_gdb, layer='mpo_and_statewide_residential_parcel_area_2014')
+
+# 2022 layers
+m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022') |> 
+  mutate(
+    parcel_type = case_when(
+      MIN_LUCA %in% as.character(res.codes) ~ 'RES',
+      MIN_LUCA %in% as.character(com.codes) ~ 'COM'    
+    )
+  ) %>%
+  st_make_valid(.) %>%
+  st_cast(., 'MULTIPOLYGON')
+
+res22 <- m22 |> 
+  filter(parcel_type == 'RES') |> 
+  select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
+  rename(parcel_area_m2 = Shape_Area)
+
+res22_ct <- st_intersection(res22,ct20)
+
+ct_res22_area <- res22_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(ct20_id) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(ct_res22_area, dsn=task_gdb, layer='tract_residential_parcel_area_2022')
+
+res22_muni <- st_intersection(res22, msf)
+
+muni_res22_area <- res22_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(muni_res22_area, dsn=task_gdb, layer='muni_residential_parcel_area_2022')
+
+cmsubtyp_res22_area <- res22_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(cmsbt08) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(cmsubtyp_res22_area, dsn=task_gdb, layer='community_subtype_residential_parcel_area_2022')
+
+sw_res22_area <- res22_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  summarize(res_area_m2 = sum(area_m2)) |> 
+  mutate(mpo = 'STATEWIDE')
+
+mpo_res22_area <- res22_ct %>%
+  mutate(area_m2 = st_area(.)) |> 
+  group_by(mpo) |> 
+  summarize(res_area_m2 = sum(area_m2)) |> 
+  rbind(sw_res22_area)
+st_write(mpo_res22_area, dsn=task_gdb, layer='mpo_and_statewide_residential_parcel_area_2022')
 
 ```
