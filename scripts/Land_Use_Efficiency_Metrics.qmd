@@ -36,6 +36,7 @@ data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data
 task_path = paste0(data_path,'/Task_3/')
 sp_path <- paste0(task_path,'Spatial/')
 task_gdb = paste0(sp_path, 'LandUse_Efficiency_Metrics.gdb')
+task_gpkg = paste0(sp_path, 'LandUse_Efficiency_Metrics.gpkg')
 
 parcel_root <- paste0(base,'/Datasets/Parcel_DB/Data/parcel_timeseries')
 assess_path <- file.path(parcel_root,'_Assess_CSVs')
@@ -557,35 +558,35 @@ emp.mpo <- emp.blk |>
 # 5 - NLCD Developed Area calculation
 
 ```{r}
-msf <- muni_sf(2020)
+msf <- muni_sf(2020) |> 
+  left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,mpo,cmsbt08), by = 'muni_id')
 ct20 <- tract_sf(2020)
 
 dev2014 <- st_read(dsn = task_gdb, layer='nlcd2014_developed_area') |> 
   st_transform(crs = st_crs(msf))
 
-
 dev14_ct <- st_intersection(dev2014,ct20) %>% 
   mutate(area_m2 = st_area(.))
-st_write(dev14_ms, dsn = task_gdb, layer = 'nlcd2014_developed_tract_inter', append=F)
+st_write(dev14_ct, dsn = task_gpkg, layer = 'nlcd2014_developed_tract_inter', append=F)
 
 dev14_ct <- dev14_ct |> 
   group_by(ct20_id) |> 
   summarize(developed_area_m2 = sum(area_m2))
-saveRDS(dev14_ct, paset0(sp_path, 'nlcd2014_dev_area_tract.rds'))
+saveRDS(dev14_ct, paste0(sp_path, 'nlcd2014_dev_area_tract.rds'))
 
 dev14_ms <- st_intersection(dev2014,msf) %>% 
   mutate(area_m2 = st_area(.))
-st_write(dev14_ms, dsn = task_gdb, layer = 'nlcd2014_developed_muni_inter', append=F)
+st_write(dev14_ms, dsn = task_gpkg, layer = 'nlcd2014_developed_muni_inter', append=F)
 
 dev14_muni <- dev14_ms |> 
   group_by(muni_id, muni_name) |> 
   summarize(developed_area_m2 = sum(area_m2))
-saveRDS(dev14_muni, paset0(sp_path, 'nlcd2014_dev_area_muni.rds'))
+saveRDS(dev14_muni, paste0(sp_path, 'nlcd2014_dev_area_muni.rds'))
 
 dev14_cmsbt <- dev14_ms |> 
   group_by(cmsbt08) |> 
   summarize(developed_area_m2 = sum(area_m2))
-saveRDS(dev14_cmsbt, paset0(sp_path, 'nlcd2014_dev_area_commsubtype.rds'))
+saveRDS(dev14_cmsbt, paste0(sp_path, 'nlcd2014_dev_area_commsubtype.rds'))
 
 dev14_sw <- dev14_ms |> 
   summarize(developed_area_m2 = sum(area_m2)) |> 
@@ -595,7 +596,7 @@ dev14_mpo <- dev14_ms |>
   group_by(mpo) |> 
   summarize(developed_area_m2 = sum(area_m2)) |> 
   rbind(dev14_sw)
-saveRDS(dev14_mpo, paset0(sp_path, 'nlcd2014_dev_area_mpo.rds'))
+saveRDS(dev14_mpo, paste0(sp_path, 'nlcd2014_dev_area_mpo.rds'))
 
 # 2023 NLCD
 
@@ -604,26 +605,26 @@ dev2023 <- st_read(dsn = task_gdb, layer='nlcd2023_developed_area') |>
 
 dev23_ct <- st_intersection(dev2023,ct20) %>% 
   mutate(area_m2 = st_area(.))
-st_write(dev23_ms, dsn = task_gdb, layer = 'nlcd2023_developed_tract_inter', append=F)
+st_write(dev23_ct, dsn = task_gpkg, layer = 'nlcd2023_developed_tract_inter', append=F)
 
 dev23_ct <- dev23_ct |> 
   group_by(ct20_id) |> 
   summarize(developed_area_m2 = sum(area_m2))
-saveRDS(dev23_ct, paset0(sp_path, 'nlcd2023_dev_area_tract.rds'))
+saveRDS(dev23_ct, paste0(sp_path, 'nlcd2023_dev_area_tract.rds'))
 
 dev23_ms <- st_intersection(dev2023,msf) %>% 
   mutate(area_m2 = st_area(.))
-st_write(dev23_ms, dsn = task_gdb, layer = 'nlcd2023_developed_muni_inter', append=F)
+st_write(dev23_ms, dsn = task_gpkg, layer = 'nlcd2023_developed_muni_inter', append=F)
 
 dev23_muni <- dev23_ms |> 
   group_by(muni_id, muni_name) |> 
   summarize(developed_area_m2 = sum(area_m2))
-saveRDS(dev23_muni, paset0(sp_path, 'nlcd2023_dev_area_muni.rds'))
+saveRDS(dev23_muni, paste0(sp_path, 'nlcd2023_dev_area_muni.rds'))
 
 dev23_cmsbt <- dev23_ms |> 
   group_by(cmsbt08) |> 
   summarize(developed_area_m2 = sum(area_m2))
-saveRDS(dev23_cmsbt, paset0(sp_path, 'nlcd2023_dev_area_commsubtype.rds'))
+saveRDS(dev23_cmsbt, paste0(sp_path, 'nlcd2023_dev_area_commsubtype.rds'))
 
 dev23_sw <- dev23_ms |> 
   summarize(developed_area_m2 = sum(area_m2)) |> 
@@ -633,7 +634,7 @@ dev23_mpo <- dev23_ms |>
   group_by(mpo) |> 
   summarize(developed_area_m2 = sum(area_m2)) |> 
   rbind(dev23_sw)
-saveRDS(dev23_mpo, paset0(sp_path, 'nlcd2023_dev_area_mpo.rds'))
+saveRDS(dev23_mpo, paste0(sp_path, 'nlcd2023_dev_area_mpo.rds'))
 
 
 ```
