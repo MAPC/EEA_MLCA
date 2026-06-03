@@ -22,7 +22,7 @@ pacman::p_load(
 # devtools::install_github('MAPC/mapcdatakeys')
 library(mapcdatakeys)
 
-# reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
 
 # Paths
 if (grepl('VM',Sys.info()[['nodename']])){
@@ -918,8 +918,8 @@ ct20 <- mapcdatakeys::tract_sf(2020)
 msf <- mapcdatakeys::muni_sf(2020) |> 
   left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,cmsbt08), by = 'muni_id')
 
-res.codes <- c(10,12,13,14,16,17,18,19,61,71,81,91,945,959,970,973,100:131,133:139,150:199)
-com.codes <- c(13,14,23,30,31,32,34,35,36,37,38,39,40,41,42,43,45,46,47,48,49,63,64,73,74,83,93,94,140,220,300:393,400:442,917,927,940:943,955:957,960:969)
+res.codes <- c('010','012','013','014','016','017','018','019','061','071','081','091',10,12,13,14,16,17,18,19,61,71,81,91,945,959,970,973,100:131,133:139,150:199)
+com.codes <- c('013','014','023','030','031','032','034','035','036','037','038','039','040','041','042','043','045','046','047','048','049','063','064','073','074','083','093','094',13,14,23,30,31,32,34,35,36,37,38,39,40,41,42,43,45,46,47,48,49,63,64,73,74,83,93,94,140,220,300:393,400:442,917,927,940:943,955:957,960:969)
 
 # 2014 layers
 m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014') |> 
@@ -929,47 +929,19 @@ m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014') |>
       MIN_LUCA %in% as.character(com.codes) ~ 'COM'    
     )
   )
+saveRDS(m14, paste0(sp_path, 'parcels_combine_2014.rds'))
 
 res14 <- m14 |> 
   filter(parcel_type == 'RES') |> 
   select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
   rename(parcel_area_m2 = Shape_Area)
+st_write(res14, dsn=task_gpkg, layer='residential_parcel_area_2014', append = F)
 
-res14_ct <- st_intersection(res14,ct20) %>%
-  st_make_valid(.) %>%
-  st_cast(., 'MULTIPOLYGON')
-
-ct_res14_area <- res14_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
-  group_by(ct20_id) |> 
-  summarize(res_area_m2 = sum(area_m2))
-st_write(ct_res14_area, dsn=task_gdb, layer='tract_residential_parcel_area_2014')
-
-res14_muni <- st_intersection(res14, msf)
-
-muni_res14_area <- res14_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
-  group_by(muni_id,muni_name) |> 
-  summarize(res_area_m2 = sum(area_m2))
-st_write(muni_res14_area, dsn=task_gdb, layer='muni_residential_parcel_area_2014')
-
-cmsubtyp_res14_area <- res14_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
-  group_by(cmsbt08) |> 
-  summarize(res_area_m2 = sum(area_m2))
-st_write(cmsubtyp_res14_area, dsn=task_gdb, layer='community_subtype_residential_parcel_area_2014')
-
-sw_res14_area <- res14_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
-  summarize(res_area_m2 = sum(area_m2)) |> 
-  mutate(mpo = 'STATEWIDE')
-
-mpo_res14_area <- res14_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
-  group_by(mpo) |> 
-  summarize(res_area_m2 = sum(area_m2)) |> 
-  rbind(sw_res14_area)
-st_write(mpo_res14_area, dsn=task_gdb, layer='mpo_and_statewide_residential_parcel_area_2014')
+com14 <- m14 |> 
+  filter(parcel_type == 'COM') |> 
+  select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
+  rename(parcel_area_m2 = Shape_Area)
+st_write(com14, dsn=task_gpkg, layer='commercial_parcel_area_2014', append = F)
 
 # 2022 layers
 m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022') |> 
@@ -981,44 +953,248 @@ m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022') |>
   ) %>%
   st_make_valid(.) %>%
   st_cast(., 'MULTIPOLYGON')
+saveRDS(m22, paste0(sp_path, 'parcels_combine_2022.rds'))
 
 res22 <- m22 |> 
   filter(parcel_type == 'RES') |> 
   select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
   rename(parcel_area_m2 = Shape_Area)
+st_write(res22, dsn=task_gpkg, layer='residential_parcel_area_2022', append = F)
 
-res22_ct <- st_intersection(res22,ct20)
+com22 <- m22 |> 
+  filter(parcel_type == 'COM') |> 
+  select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
+  rename(parcel_area_m2 = Shape_Area)
+st_write(com22, dsn=task_gpkg, layer='commercial_parcel_area_2022', append = F)
 
-ct_res22_area <- res22_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
+```
+
+# 8 - Clip NLCD to res/com parcels
+
+```{python}
+import arcpy
+from arcpy import env
+arcpy.env.overwriteOutput = True
+
+# Set environment settings
+arcpy.env.workspace = r.task_gdb
+
+arcpy.analysis.PairwiseClip(
+    in_features="nlcd2014_developed_area",
+    clip_features=r.task_gpkg + "/main.commercial_parcel_area_2014",
+    out_feature_class="nlcd2014_developed_in_commercial_parcel",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="nlcd2014_developed_area",
+    clip_features="residential_parcel_area_2014",
+    out_feature_class="nlcd2014_developed_in_residential_parcel",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="nlcd2023_developed_area",
+    clip_features=r.task_gpkg + "/main.commercial_parcel_area_2022",
+    out_feature_class="nlcd2023_developed_in_commercial_parcel",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+
+arcpy.analysis.PairwiseClip(
+    in_features="nlcd2023_developed_area",
+    clip_features=r.task_gpkg + "/main.residential_parcel_area_2022",
+    out_feature_class="nlcd2023_developed_in_residential_parcel",
+    cluster_tolerance=None,
+    precision="MAX_PRECISION"
+)
+```
+
+# 9 - Summarize NLCD and parcel areas to Tract/Muni/Community Subtype/MPO/State
+```{r}
+
+ct20 <- mapcdatakeys::tract_sf(2020)
+msf <- mapcdatakeys::muni_sf(2020) |> 
+  left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,cmsbt08), by = 'muni_id')
+
+m14 <- readRDS(paste0(sp_path, 'parcels_combine_2014.rds'))
+m22 <- readRDS(paste0(sp_path, 'parcels_combine_2022.rds'))
+
+# Tract, Muni, Community Subtype, MPO, Statewide summaries
+
+par14_ct <- st_intersection(m14,ct20) %>%
+  st_make_valid(.) %>%
+  st_cast(., 'MULTIPOLYGON')%>%
+  mutate(area_m2 = st_area(.))
+saveRDS(par14_ct, paste0(sp_path,'parcel2014_tract_inter.rds'))
+
+par14_muni <- st_intersection(m14,msf) %>%
+  st_make_valid(.) %>%
+  st_cast(., 'MULTIPOLYGON')%>%
+  mutate(area_m2 = st_area(.))
+saveRDS(par14_muni, paste0(sp_path,'parcel2014_muni_inter.rds'))
+
+par22_ct <- st_intersection(m22,ct20) %>%
+  st_make_valid(.) %>%
+  st_cast(., 'MULTIPOLYGON')%>%
+  mutate(area_m2 = st_area(.))
+saveRDS(par22_ct, paste0(sp_path,'parcel2022_tract_inter.rds'))
+
+par22_muni <- st_intersection(m22,msf) %>%
+  st_make_valid(.) %>%
+  st_cast(., 'MULTIPOLYGON')%>%
+  mutate(area_m2 = st_area(.))
+saveRDS(par22_muni, paste0(sp_path,'parcel2022_muni_inter.rds'))
+
+
+ # Sub geography summaries
+ct_res14_area <- par14_ct |> 
+  filter(parcel_type=='RES') |> 
   group_by(ct20_id) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(ct_res22_area, dsn=task_gdb, layer='tract_residential_parcel_area_2022')
+st_write(ct_res14_area, dsn=task_gpkg, append=F, layer='tract_residential_parcel_area_2014')
 
-res22_muni <- st_intersection(res22, msf)
-
-muni_res22_area <- res22_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
+muni_res14_area <- par14_muni |> 
+  filter(parcel_type=='RES') |> 
   group_by(muni_id,muni_name) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(muni_res22_area, dsn=task_gdb, layer='muni_residential_parcel_area_2022')
+st_write(muni_res14_area, dsn=task_gpkg, append=F, layer='muni_residential_parcel_area_2014')
 
-cmsubtyp_res22_area <- res22_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
+cmsubtyp_res14_area <- par14_muni |> 
+  filter(parcel_type=='RES') |> 
   group_by(cmsbt08) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(cmsubtyp_res22_area, dsn=task_gdb, layer='community_subtype_residential_parcel_area_2022')
+st_write(cmsubtyp_res14_area, dsn=task_gpkg, append=F, layer='community_subtype_residential_parcel_area_2014')
 
-sw_res22_area <- res22_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
+sw_res14_area <- par14_muni |> 
+  filter(parcel_type=='RES')  |> 
   summarize(res_area_m2 = sum(area_m2)) |> 
   mutate(mpo = 'STATEWIDE')
 
-mpo_res22_area <- res22_ct %>%
-  mutate(area_m2 = st_area(.)) |> 
+mpo_res14_area <- par14_muni |> 
+  filter(parcel_type=='RES') |> 
+  group_by(mpo) |> 
+  summarize(res_area_m2 = sum(area_m2)) |> 
+  rbind(sw_res14_area)
+st_write(mpo_res14_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_residential_parcel_area_2014')
+
+# Commercial
+ct_com14_area <- par14_ct |> 
+  filter(parcel_type=='COM') |> 
+  group_by(ct20_id) |> 
+  summarize(com_area_m2 = sum(area_m2))
+st_write(ct_com14_area, dsn=task_gpkg, append=F, layer='tract_commercial_parcel_area_2014')
+
+muni_com14_area <- par14_muni |> 
+  filter(parcel_type=='COM')  |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(com_area_m2 = sum(area_m2))
+st_write(muni_com14_area, dsn=task_gpkg, append=F, layer='muni_commercial_parcel_area_2014')
+
+cmsubtyp_com14_area <- par14_muni |> 
+  filter(parcel_type=='COM')  |> 
+  group_by(cmsbt08) |> 
+  summarize(com_area_m2 = sum(area_m2))
+st_write(cmsubtyp_com14_area, dsn=task_gpkg, append=F, layer='community_subtype_commercial_parcel_area_2014')
+
+sw_com14_area <- par14_muni |> 
+  filter(parcel_type=='COM') |> 
+  summarize(com_area_m2 = sum(area_m2)) |> 
+  mutate(mpo = 'STATEWIDE')
+
+mpo_com14_area <- par14_muni |> 
+  filter(parcel_type=='COM')  |> 
+  group_by(mpo) |> 
+  summarize(com_area_m2 = sum(area_m2)) |> 
+  rbind(sw_com14_area)
+st_write(mpo_com14_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_commercial_parcel_area_2014')
+
+
+# 2022 data
+
+ct_res22_area <- par22_ct |> 
+  filter(parcel_type=='RES')  |> 
+  group_by(ct20_id) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(ct_res22_area, dsn=task_gpkg, append=F, layer='tract_residential_parcel_area_2022')
+
+muni_res22_area <- par22_muni |> 
+  filter(parcel_type=='RES')  |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(muni_res22_area, dsn=task_gpkg, append=F, layer='muni_residential_parcel_area_2022')
+
+cmsubtyp_res22_area <- par22_muni |> 
+  filter(parcel_type=='RES')  |> 
+  group_by(cmsbt08) |> 
+  summarize(res_area_m2 = sum(area_m2))
+st_write(cmsubtyp_res22_area, dsn=task_gpkg, append=F, layer='community_subtype_residential_parcel_area_2022')
+
+sw_res22_area <- par22_muni |> 
+  filter(parcel_type=='RES')  |> 
+  summarize(res_area_m2 = sum(area_m2)) |> 
+  mutate(mpo = 'STATEWIDE')
+
+mpo_res22_area <- par22_muni |> 
+  filter(parcel_type=='RES')  |> 
   group_by(mpo) |> 
   summarize(res_area_m2 = sum(area_m2)) |> 
   rbind(sw_res22_area)
-st_write(mpo_res22_area, dsn=task_gdb, layer='mpo_and_statewide_residential_parcel_area_2022')
+st_write(mpo_res22_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_residential_parcel_area_2022')
+
+# Commercial
+ct_com22_area <- par22_ct |> 
+  filter(parcel_type=='COM')  |> 
+  group_by(ct20_id) |> 
+  summarize(com_area_m2 = sum(area_m2))
+st_write(ct_com22_area, dsn=task_gpkg, append=F, layer='tract_commercial_parcel_area_2022')
+
+muni_com22_area <- par22_muni |> 
+  filter(parcel_type=='COM')  |> 
+  group_by(muni_id,muni_name) |> 
+  summarize(com_area_m2 = sum(area_m2))
+st_write(muni_com22_area, dsn=task_gpkg, append=F, layer='muni_commercial_parcel_area_2022')
+
+cmsubtyp_com22_area <- par22_muni |> 
+  filter(parcel_type=='COM')  |> 
+  group_by(cmsbt08) |> 
+  summarize(com_area_m2 = sum(area_m2))
+st_write(cmsubtyp_com22_area, dsn=task_gpkg, append=F, layer='community_subtype_commercial_parcel_area_2022')
+
+sw_com22_area <- par22_muni |> 
+  filter(parcel_type=='COM')  |> 
+  summarize(com_area_m2 = sum(area_m2)) |> 
+  mutate(mpo = 'STATEWIDE')
+
+mpo_com22_area <- par22_muni |> 
+  filter(parcel_type=='COM') |> 
+  group_by(mpo) |> 
+  summarize(com_area_m2 = sum(area_m2)) |> 
+  rbind(sw_com22_area)
+st_write(mpo_com22_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_commercial_parcel_area_2022')
+
+
+```
+# 10 - Parcel LUC Changes
+```{r}
+
+p14 <- m14 |> 
+  rename(MIN_LUCA_2014 = MIN_LUCA,
+         MAX_LUCA_2014 = MAX_LUCA,
+         LUCA_DES_2014 = LUCA_DES_L,
+         LUCA_SYMB_2014 = LUCA_SUMB,
+         parcel_area_2014 = Shape_Area
+         )
+p22 <- m22 |> 
+  rename(MIN_LUCA_2022 = MIN_LUCA,
+         MAX_LUCA_2022 = MAX_LUCA,
+         LUCA_DES_2022 = LUCA_DES_L,
+         LUCA_SYMB_2022 = LUCA_SUMB,
+         parcel_area_2022 = Shape_Area
+         )
+pchg <- left_join(p14, p22, by='LOC_ID')
+
 
 ```
