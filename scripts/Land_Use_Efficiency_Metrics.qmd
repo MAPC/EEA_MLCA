@@ -1184,17 +1184,22 @@ p14 <- m14 |>
   rename(MIN_LUCA_2014 = MIN_LUCA,
          MAX_LUCA_2014 = MAX_LUCA,
          LUCA_DES_2014 = LUCA_DES_L,
-         LUCA_SYMB_2014 = LUCA_SUMB,
+         LUCA_SYMB_2014 = LUCA_SYMB,
          parcel_area_2014 = Shape_Area
-         )
+         ) |> 
+  select(LOC_ID,MIN_LUCA_2014,MAX_LUCA_2014,LUCA_DES_2014,LUCA_SYMB_2014,parcel_area_2014) |> 
+  setDT()
 p22 <- m22 |> 
   rename(MIN_LUCA_2022 = MIN_LUCA,
          MAX_LUCA_2022 = MAX_LUCA,
          LUCA_DES_2022 = LUCA_DES_L,
-         LUCA_SYMB_2022 = LUCA_SUMB,
+         LUCA_SYMB_2022 = LUCA_SYMB,
          parcel_area_2022 = Shape_Area
-         )
+         ) |> 
+  select(LOC_ID,MIN_LUCA_2022,MAX_LUCA_2022,LUCA_DES_2022,LUCA_SYMB_2022,parcel_area_2022) |> 
+  setDT()
 pchg <- left_join(p14, p22, by='LOC_ID')
 
+saveRDS(pchg,paste0(sp_path,'parcel_luc_change_2014_2022_sameLOCID.rds'))
 
 ```
