@@ -37,26 +37,94 @@ if (grepl('VM',Sys.info()[['nodename']])){
 
 data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
 
-scen_path = paste0(data_path,'/Task_4/Scenario_3/')
-sp_path <- paste0(scen_path,'Inputs/Spatial/')
-scen_gdb = paste0(sp_path, 'Scenario_3.gdb')
+scen3_path = paste0(data_path,'/Task_4/Scenario_3/')
+sp3_path <- paste0(scen_path,'Inputs/Spatial/')
+scen3_gdb = paste0(sp_path, 'Scenario_3.gdb')
 
+scen4_path = paste0(data_path,'/Task_4/Scenario_4/')
+sp4_path <- paste0(scen_path,'Inputs/Spatial/')
+scen4_gdb = paste0(sp_path, 'Scenario_4.gdb')
 
 knitr::opts_knit$set(root.dir = data_path)
 ```
 
 # 2 - Zoning Constraint Adjustments
 
+```{r}
+
+res.codes <- c(
+  '010',
+  '012',
+  '013',
+  '014',
+  '016',
+  '017',
+  '018',
+  '019',
+  '061',
+  '071',
+  '081',
+  '091',
+  10,
+  12,
+  13,
+  14,
+  16,
+  17,
+  18,
+  19,
+  61,
+  71,
+  81,
+  91,
+  945,
+  959,
+  970,
+  973,
+  100:131,
+  133:139,
+  150:199
+)
+
+res.par <- st_read(dsn = scen_gdb, layer = "parcel_sewer_service_area_constraint_erase") |>
+  filter(MIN_LUCA %in% as.character(res.codes))
+
+st_write(res.par, dsn = scen_gdb, layer='res_parcels_in_sewer_service_area', append=F)
+
+res.sewer <- st_union(res.par)
+st_write(res.sewer, dsn = scen_gdb, layer='residential_area_with_sewer_service_dissolve', append=F)
+
+tod <- st_read(dsn='D:/Downloads/scratch_D/scratch_D.gdb',layer='Rail_stations_buffer_zoning_inter')
+setDT(tod)
+
+tod[,max_far_inter:=max(max_far),FID_Rail_stations_buffer]
+tod[,max_dua_inter:=max(max_dua),FID_Rail_stations_buffer]
+
+tod.tab <- tod[,.(FID_Rail_stations_buffer,max_dua_inter,max_far_inter,Shape)]
+tod.tab[max_dua_inter<100 & , max_dua_inter:=100]
+tod.tab[,zoning:='TOD_DUA100']
+setnames(tod.tab,c('id','max_dua','max_far','zoning','Shape'))
+
+tod.sf <- st_to_sf(tod.tab)
+
+```
+
+
 # 3 - Development Pipeline Adjustments
 
 ```{r}
 
-urb.ctr <- mapcdatakeys::all_muni_data_keys |> 
+ruc <- mapcdatakeys::all_muni_data_keys |> 
   select(muni_id,cmtyp08) |> 
+  right_join(mapcdatakeys::muni_sf(2020), by='muni_id') |> 
   filter(cmtyp08 == 'Regional Urban Center')
 
-blk.ctr <- mapcdatakeys::geog_xw_2010 |> 
-  filter(muni_id %in% urb.ctr$muni_id)
+ruc.blk <- mapcdatakeys::block_sf(2010) |> 
+  filter(muni_id %in% ruc$muni_id)
+
+st_write(ruc.blk, dsn = scen_gdb, layer = 'blocks2010_regional_urban_centers')
+
+
 
 
 
@@ -90,3 +158,7 @@ mb30 <- mb.raw |>
 ```
 
 # 4 - Skims Adjustments
+
+```{r}
+
+cong.taz <- fread()

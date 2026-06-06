@@ -35,11 +35,18 @@ if (grepl('VM',Sys.info()[['nodename']])){
 
 data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data/Task_4')
 
-scen <- 'Scenario_2'
 
-skim_path <- file.path(data_path,scen,'Skims')
-# skim_path <- 'C:/Users/gately/Desktop/Skims'
-dir.create(skim_path, showWarnings = F)
+scen3 <- 'Scenario_3'
+scen4 <- 'Scenario_4'
+
+scen <- scen4 
+skim_path <- file.path(data_path,scen,'Inputs/Skims')
+
+skim3_path <- file.path(data_path,scen3,'Inputs/Skims')
+skim4_path <- file.path(data_path,scen4,'Inputs/Skims')
+
+# skim_path <- 'C:/Users/cgate/Desktop/Skims'
+# dir.create(skim_path, showWarnings = F)
 
 knitr::opts_knit$set(root.dir = data_path)
 
@@ -61,31 +68,35 @@ if(scen == 'Scenario_2') {
 }
 
 if(scen == 'Scenario_3') {
-  base_prefix <- ''
-  plan_prefix <- ''
+  base_prefix <- '2019_Base_Nov25SEData'
+  int_prefix <- '2024_Draft20260414'
+  plan_prefix <- '2050plan_Nov25SEData'
 }
 
 if(scen == 'Scenario_4') {
-  base_prefix <- ''
-  plan_prefix <- ''
+  base_prefix <- '2019_Base_Nov25SEData'
+  int_prefix <- '2024_Draft20260414'
+  plan_prefix <- '2050plan_Nov25SEData'
 }
 
 filenames <- c(
-  # file.path(
-  # skim_path,
-  # base_prefix,
-  # c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx'))
-# ,
-file.path(
-  skim_path,
-  int_prefix,
-  c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx'))
-# ,
-# file.path(
-#   skim_path,
-#   plan_prefix,
-#   c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
-# )
+  file.path(
+    skim_path,
+    base_prefix,
+    c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
+  )
+  ,
+  file.path(
+    skim_path,
+    int_prefix,
+    c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
+  )
+  ,
+  file.path(
+    skim_path,
+    plan_prefix,
+    c('hwy_am.omx', 'tw_am.omx', 'ta_am.omx')
+  )
 )
 
 ```
@@ -177,6 +188,195 @@ for (yr in c(plan_prefix)) {
     fwrite(mapc, file.path(skim_path,yr,
            paste0('mapcm_skims_', yr, '.csv')))
     fwrite(swm, file.path(skim_path,yr,
+           paste0('swm_skims_', yr, '.csv')))
+    
+}
+
+```
+
+
+# 5 - Modify skims for EEA Scenario 3
+
+```{r}
+
+# Mode-skims are available:
+# lbus = Local Bus
+# xbus = Express Bus
+# brt = Bus Rapid Transit (Silver Line)
+# lrt = Light Rail (Green Line + Mattapan Fast Line)
+# hrt = Heavy Rail (Red, Orange, Blue lines)
+# cr = Commuter Rail
+# fr = Ferry
+# sh =Shuttle
+# rta = RTA Local Bus
+# rb = Regional Bus
+
+zid <- fread(paste0(skim3_path,'/swm_zone_ids.csv'))
+
+
+for (yr in c(base_prefix, int_prefix, plan_prefix)) {
+# for (yr in c(plan_prefix)) {    
+  
+    # SOV / Passenger vehicle
+    hwy <- fread(file.path(skim3_path, yr, 'hwy_am.csv'))
+    hwy[, sov_am_totcost := da_time / 60 * 18.50 + da_toll]
+    hwy <- hwy[, .(from_zone_id, to_zone_id, sov_am_totcost)]
+    setkey(hwy, from_zone_id, to_zone_id)
+    
+    # Walk-access transit
+    wat <- fread(file.path(skim3_path, yr, 'tw_am.csv')) |> 
+      mutate(
+        ivtt_brt = ivtt_brt * .95,
+        ivtt_lbus = ivtt_lbus * .95,
+        ivtt_xbus = ivtt_xbus * .95,
+        ivtt_rta = ivtt_rta * .95,
+        ivtt_rb = ivtt_rb * .95,
+        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus
+      ) |> 
+      setDT()
+    wat[, wat_am_totcost := Fare + (ivtt / 60 * 18.50) + (iwait + walk + xwait) /
+        60 * 18.5 * 3]
+    wat <- wat[, .(from_zone_id, to_zone_id, wat_am_totcost)]
+    setkey(wat, from_zone_id, to_zone_id)
+    
+    # Drive-access transit
+    dat <- fread(file.path(skim3_path, yr, 'ta_am.csv')) |> 
+      mutate(
+        ivtt_brt = ivtt_brt * .95,
+        ivtt_lbus = ivtt_lbus * .95,
+        ivtt_xbus = ivtt_xbus * .95,
+        ivtt_rta = ivtt_rta * .95,
+        ivtt_rb = ivtt_rb * .95,
+        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus,
+        iwait = case_when(
+          ivtt_cr > 0 & (iwait * 0.75) < 15 ~ (iwait * 0.75),
+          ivtt_cr > 0 & (iwait * 0.75) > 15 & iwait > 15 ~ 15,
+          .default = iwait)
+        )|> 
+      setDT()
+    dat[, dat_am_totcost := Fare + auto_cost + (ivtt / 60 * 18.50) + (iwait + walk + xwait) /
+        60 * 18.5 * 3]
+    dat <- dat[, .(from_zone_id, to_zone_id, dat_am_totcost)]
+    setkey(dat, from_zone_id, to_zone_id)
+    
+    # Merge all modes
+    skim <- hwy[wat][dat]
+    skim[wat_am_totcost == 0, wat_am_totcost := 9999999][dat_am_totcost ==0, dat_am_totcost := 9999999]
+    saveRDS(skim, file.path(skim3_path,yr,paste0(yr, '_skims_combined.rds')))
+    
+    # Subset to MAPC zones
+    mapc <- skim[(from_zone_id <= 2667 |
+                  from_zone_id == 3000) & (to_zone_id <= 2667 | to_zone_id == 3000)]
+    mapc[, travel_time := 1]
+    
+    # Subset to SWM zones
+    sid <- skim[, sun(from_zone_id)]
+    drops <- sid[!sid %in% zid$zone_id]
+    swm <- skim[!from_zone_id %in% drops & !to_zone_id %in% drops]
+    swm[,travel_time:=1]
+    
+    # Export
+    fwrite(mapc, file.path(skim3_path,yr,
+           paste0('mapcm_skims_', yr, '.csv')))
+    fwrite(swm, file.path(skim3_path,yr,
+           paste0('swm_skims_', yr, '.csv')))
+    
+}
+
+
+```
+
+# 6 - Modify skims for EEA Scenario 4
+
+```{r}
+
+# Mode-skims are available:
+# lbus = Local Bus
+# xbus = Express Bus
+# brt = Bus Rapid Transit (Silver Line)
+# lrt = Light Rail (Green Line + Mattapan Fast Line)
+# hrt = Heavy Rail (Red, Orange, Blue lines)
+# cr = Commuter Rail
+# fr = Ferry
+# sh =Shuttle
+# rta = RTA Local Bus
+# rb = Regional Bus
+
+zid <- fread(paste0(skim4_path,'/swm_zone_ids.csv'))
+
+cong.taz <- fread(paste0(skim4_path, '/congestion_zone_taz.csv')) |> pull(tazID) |> unique()
+
+
+# for (yr in c(base_prefix, int_prefix, plan_prefix)) {
+for (yr in c(plan_prefix)) {    
+  
+    # SOV / Passenger vehicle
+    hwy <- fread(file.path(skim4_path, yr, 'hwy_am.csv'))
+    hwy[!from_zone_id %in% cong.taz & to_zone_id %in% cong.taz, da_toll:=da_toll+10]
+    hwy[, vmt_fee := dist * 0.05]
+    hwy[, sov_am_totcost := da_time / 60 * 18.50 + da_toll + vmt_fee]
+    hwy <- hwy[, .(from_zone_id, to_zone_id, sov_am_totcost)]
+    setkey(hwy, from_zone_id, to_zone_id)
+    
+    # Walk-access transit
+  
+    # Walk-access transit
+    wat <- fread(file.path(skim3_path, yr, 'tw_am.csv')) |> 
+      mutate(
+        ivtt_brt = ivtt_brt * .9,
+        ivtt_lbus = ivtt_lbus * .9,
+        ivtt_xbus = ivtt_xbus * .9,
+        ivtt_rta = ivtt_rta * .9,
+        ivtt_rb = ivtt_rb * .9,
+        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus
+      ) |> 
+      setDT()
+    wat[, wat_am_totcost := Fare + (ivtt / 60 * 18.50) + (iwait + walk + xwait) /
+        60 * 18.5 * 3]
+    wat <- wat[, .(from_zone_id, to_zone_id, wat_am_totcost)]
+    setkey(wat, from_zone_id, to_zone_id)
+    
+    # Drive-access transit
+    dat <- fread(file.path(skim3_path, yr, 'ta_am.csv')) |> 
+      mutate(
+        ivtt_brt = ivtt_brt * .9,
+        ivtt_lbus = ivtt_lbus * .9,
+        ivtt_xbus = ivtt_xbus * .9,
+        ivtt_rta = ivtt_rta * .9,
+        ivtt_rb = ivtt_rb * .9,
+        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus,
+        iwait = case_when(
+          ivtt_cr > 0 & (iwait * 0.5) < 10 ~ (iwait * 0.5),
+          ivtt_cr > 0 & (iwait * 0.5) > 10 & iwait > 10 ~ 10,
+          .default = iwait),
+        vmt_fee = ddist * 0.05
+        )|> 
+      setDT()
+    dat[, dat_am_totcost := Fare + auto_cost + vmt_fee + (ivtt / 60 * 18.50) + (iwait + walk + xwait) /
+        60 * 18.5 * 3]
+    dat <- dat[, .(from_zone_id, to_zone_id, dat_am_totcost)]
+    setkey(dat, from_zone_id, to_zone_id)
+    
+    # Merge all modes
+    skim <- hwy[wat][dat]
+    skim[wat_am_totcost == 0, wat_am_totcost := 9999999][dat_am_totcost ==0, dat_am_totcost := 9999999]
+    saveRDS(skim, file.path(skim4_path,yr,paste0(yr, '_skims_combined.rds')))
+    
+    # Subset to MAPC zones
+    mapc <- skim[(from_zone_id <= 2667 |
+                  from_zone_id == 3000) & (to_zone_id <= 2667 | to_zone_id == 3000)]
+    mapc[, travel_time := 1]
+    
+    # Subset to SWM zones
+    sid <- skim[, sun(from_zone_id)]
+    drops <- sid[!sid %in% zid$zone_id]
+    swm <- skim[!from_zone_id %in% drops & !to_zone_id %in% drops]
+    swm[,travel_time:=1]
+    
+    # Export
+    fwrite(mapc, file.path(skim4_path,yr,
+           paste0('mapcm_skims_', yr, '.csv')))
+    fwrite(swm, file.path(skim4_path,yr,
            paste0('swm_skims_', yr, '.csv')))
     
 }

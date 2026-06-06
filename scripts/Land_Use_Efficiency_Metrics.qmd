@@ -37,6 +37,7 @@ data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data
 task_path = paste0(data_path,'/Task_3/')
 sp_path <- paste0(task_path,'Spatial/')
 task_gdb = paste0(sp_path, 'LandUse_Efficiency_Metrics.gdb')
+task_gdb2 = paste0(sp_path, 'LUE_Metrics.gdb')
 task_gpkg = paste0(sp_path, 'LandUse_Efficiency_Metrics.gpkg')
 
 parcel_root <- paste0(base,'/Datasets/Parcel_DB/Data/parcel_timeseries')
@@ -732,6 +733,7 @@ saveRDS(dev23_mpo, paste0(sp_path, 'nlcd2023_dev_area_mpo.rds'))
 ## 6a - Parcels combined for \<=2014
 
 ```{r}
+
 msf <- mapcdatakeys::muni_sf(2020) |> 
   select(muni_name,geometry)
 
@@ -851,6 +853,99 @@ m14 <- rbind(m14,m20,m16) %>%
 
 st_write(m14, dsn = delta_gdb, layer = 'parcels_combine_2014', append=F)
 
+# Missing data somehow
+m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014')
+ns <- names(m14)
+
+p306 <- st_read(dsn = comp_gdb, layer = 'M306_parcel_2012_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2012,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Wales',
+         YEAR=2012,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p20 <- st_read(dsn = comp_gdb, layer = 'M020_parcel_2011_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2011,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Barnstable',
+         YEAR=2011,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p181 <- st_read(dsn = comp_gdb, layer = 'M181_parcel_2011_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2011,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Methuen',
+         YEAR=2011,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p38 <- st_read(dsn = comp_gdb, layer = 'M038_parcel_2012_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2012,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Boxford',
+         YEAR=2012,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p144 <- st_read(dsn = comp_gdb, layer = 'M144_parcel_2013_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2013,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Ipswich',
+         YEAR=2013,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p215 <- st_read(dsn = comp_gdb, layer = 'M215_parcel_2011_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2011,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Northborough',
+         YEAR=2011,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p49 <- st_read(dsn = comp_gdb, layer = 'M049_parcel_2012_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2012,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Cambridge',
+         YEAR=2012,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p258 <- st_read(dsn = comp_gdb, layer = 'M258_parcel_2011_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2011,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Salem',
+         YEAR=2011,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p201 <- st_read(dsn = comp_gdb, layer = 'M201_parcel_2012_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2012,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='New Bedford',
+         YEAR=2012,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+p153 <- st_read(dsn = comp_gdb, layer = 'M153_parcel_2013_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2013,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Leominster',
+         YEAR=2013,
+         SUMYEAR=2014) |> 
+  select(ns)
+
+m14m <- m14 |> 
+  filter(!CITY %in% c('Wales','Barnstable','Methuen','Boxford','Ipswich','Northborough','Cambridge','Salem','New Bedford','Leominster')) |> 
+  rbind(p306,p20,p181,p38,p144,p215,p49,p258,p201,p153)
+
+st_write(m14m, dsn = delta_gdb, layer = 'parcels_combine_2014_fixed', append=F)
+
+# Missing 2014: Wales 306, Barnstable 20, Methuen 181, Boxford 38, Ipswich 144, Northborough 215, Cambridge 49, Salem 258, New Bedford 201, Leominster 153
+
+alist <- fread('C:/Users/CGately/Desktop/Git_repos/parcels-processing/PDB_Update_2023/parcel_vintage_years_by_muni.csv')
 
 ```
 
@@ -996,6 +1091,76 @@ m22 <- m22 %>%
 
 st_write(m22, dsn = delta_gdb, layer = 'parcels_combine_2022', append=F)
 
+# Missing munis
+
+m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022')
+ns <- names(m22)
+
+p201 <- st_read(dsn = comp_gdb, layer = 'M201_parcel_2023_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2023,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='New Bedford',
+         YEAR=2023,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+p148 <- st_read(dsn = comp_gdb, layer = 'M148_parcel_2023_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2023,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Lanesborough',
+         YEAR=2023,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+p153 <- st_read(dsn = comp_gdb, layer = 'M153_parcel_2023_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2023,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Leominster',
+         YEAR=2023,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+p141 <- st_read(dsn = comp_gdb, layer = 'M141_parcel_2023_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2023,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Hudson',
+         YEAR=2023,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+p16 <- st_read(dsn = comp_gdb, layer = 'M016_parcel_2023_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2023,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Attleboro',
+         YEAR=2023,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+p292 <- st_read(dsn = comp_gdb, layer = 'M292_parcel_2023_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2023,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Swansea',
+         YEAR=2023,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+p346 <- st_read(dsn = comp_gdb, layer = 'M346_parcel_2024_with_assess_data') |> 
+  rename(LOC_ID=LOC_ID_2024,
+         LOT_SQFT = LOT_SIZE_G) |> 
+  mutate(CITY='Winthrop',
+         YEAR=2024,
+         SUMYEAR=2022) |> 
+  select(ns)
+
+m22m <- m22 |> 
+  filter(!CITY %in% c('New Bedford','Lanesborough','Leominster','Hudson','Attleboro','Swansea','Winthrop')) |> 
+  rbind(p201,p148,p153,p141,p16,p292,p346)
+
+st_write(m22m, dsn = delta_gdb, layer = 'parcels_combine_2022_fixed', append=F)
+# Missing 2022: New BEdford 201, LanesBorough 148, Leominster 153, Hudson 141. Attleboro 16, Swansea 292, Winthrop 346
+
+
+
 ```
 
 # 7 - Calculate residential and commercial parcel area
@@ -1006,12 +1171,111 @@ ct20 <- mapcdatakeys::tract_sf(2020)
 msf <- mapcdatakeys::muni_sf(2020) |> 
   left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,cmsbt08), by = 'muni_id')
 
-res.codes <- c('010','012','013','014','016','017','018','019','061','071','081','091',10,12,13,14,16,17,18,19,61,71,81,91,945,959,970,973,100:131,133:139,150:199)
-com.codes <- c('013','014','023','030','031','032','034','035','036','037','038','039','040','041','042','043','045','046','047','048','049','063','064','073','074','083','093','094',13,14,23,30,31,32,34,35,36,37,38,39,40,41,42,43,45,46,47,48,49,63,64,73,74,83,93,94,140,220,300:393,400:442,917,927,940:943,955:957,960:969)
+res.codes <- c(
+  '010',
+  '012',
+  '013',
+  '014',
+  '016',
+  '017',
+  '018',
+  '019',
+  '061',
+  '071',
+  '081',
+  '091',
+  10,
+  12,
+  13,
+  14,
+  16,
+  17,
+  18,
+  19,
+  61,
+  71,
+  81,
+  91,
+  945,
+  959,
+  970,
+  973,
+  100:131,
+  133:139,
+  150:199
+)
+com.codes <- c(
+  '013',
+  '014',
+  '023',
+  '030',
+  '031',
+  '032',
+  '034',
+  '035',
+  '036',
+  '037',
+  '038',
+  '039',
+  '040',
+  '041',
+  '042',
+  '043',
+  '045',
+  '046',
+  '047',
+  '048',
+  '049',
+  '063',
+  '064',
+  '073',
+  '074',
+  '083',
+  '093',
+  '094',
+  13,
+  14,
+  23,
+  30,
+  31,
+  32,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  45,
+  46,
+  47,
+  48,
+  49,
+  63,
+  64,
+  73,
+  74,
+  83,
+  93,
+  94,
+  140,
+  220,
+  300:393,
+  400:442,
+  917,
+  927,
+  940:943,
+  955:957,
+  960:969
+)
 
+# luc.tbl <- data.table(res_codes = as.character(res.codes), com_codes = as.character(com.codes))
 # 2014 layers
-m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014') |> 
-  mutate(
+# m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014') |> 
+m14 <- m14m |> mutate(
     parcel_type = case_when(
       MIN_LUCA %in% as.character(res.codes) ~ 'RES',
       MIN_LUCA %in% as.character(com.codes) ~ 'COM'    
@@ -1032,7 +1296,8 @@ com14 <- m14 |>
 st_write(com14, dsn=task_gpkg, layer='commercial_parcel_area_2014', append = F)
 
 # 2022 layers
-m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022') |> 
+# m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022') |> 
+m22 <- m22m |>
   mutate(
     parcel_type = case_when(
       MIN_LUCA %in% as.character(res.codes) ~ 'RES',
@@ -1108,9 +1373,9 @@ msf <- mapcdatakeys::muni_sf(2020) |>
   left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,cmsbt08), by = 'muni_id') %>%
   mutate(muni_acres = st_area(.) * 0.000247105)
 munis <- munis |> left_join(msf |> st_drop_geometry() |> select(muni_id,muni_acres), by='muni_id')
-
-m14 <- readRDS(paste0(sp_path, 'parcels_combine_2014.rds'))
-m22 <- readRDS(paste0(sp_path, 'parcels_combine_2022.rds'))
+# 
+# m14 <- readRDS(paste0(sp_path, 'parcels_combine_2014.rds'))
+# m22 <- readRDS(paste0(sp_path, 'parcels_combine_2022.rds'))
 
 # Tract, Muni, Community Subtype, MPO, Statewide summaries
 
@@ -1144,19 +1409,19 @@ ct_res14_area <- par14_ct |>
   filter(parcel_type=='RES') |> 
   group_by(ct20_id) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(ct_res14_area, dsn=task_gpkg, append=F, layer='tract_residential_parcel_area_2014')
+st_write(ct_res14_area, dsn=task_gdb2, append=F, layer='tract_residential_parcel_area_2014', append=F)
 
 muni_res14_area <- par14_muni |> 
   filter(parcel_type=='RES') |> 
   group_by(muni_id,muni_name) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(muni_res14_area, dsn=task_gpkg, append=F, layer='muni_residential_parcel_area_2014')
+st_write(muni_res14_area, dsn=task_gdb2, append=F, layer='muni_residential_parcel_area_2014', append=F)
 
 cmsubtyp_res14_area <- par14_muni |> 
   filter(parcel_type=='RES') |> 
   group_by(cmsbt08) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(cmsubtyp_res14_area, dsn=task_gpkg, append=F, layer='community_subtype_residential_parcel_area_2014')
+st_write(cmsubtyp_res14_area, dsn=task_gdb2, append=F, layer='community_subtype_residential_parcel_area_2014', append=F)
 
 sw_res14_area <- par14_muni |> 
   filter(parcel_type=='RES')  |> 
@@ -1168,26 +1433,26 @@ mpo_res14_area <- par14_muni |>
   group_by(mpo) |> 
   summarize(res_area_m2 = sum(area_m2)) |> 
   rbind(sw_res14_area)
-st_write(mpo_res14_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_residential_parcel_area_2014')
+st_write(mpo_res14_area, dsn=task_gdb2, append=F, layer='mpo_and_statewide_residential_parcel_area_2014', append=F)
 
 # Commercial
 ct_com14_area <- par14_ct |> 
   filter(parcel_type=='COM') |> 
   group_by(ct20_id) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(ct_com14_area, dsn=task_gpkg, append=F, layer='tract_commercial_parcel_area_2014')
+st_write(ct_com14_area, dsn=task_gdb2, append=F, layer='tract_commercial_parcel_area_2014', append=F)
 
 muni_com14_area <- par14_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(muni_id,muni_name) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(muni_com14_area, dsn=task_gpkg, append=F, layer='muni_commercial_parcel_area_2014')
+st_write(muni_com14_area, dsn=task_gdb2, append=F, layer='muni_commercial_parcel_area_2014', append=F)
 
 cmsubtyp_com14_area <- par14_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(cmsbt08) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(cmsubtyp_com14_area, dsn=task_gpkg, append=F, layer='community_subtype_commercial_parcel_area_2014')
+st_write(cmsubtyp_com14_area, dsn=task_gdb2, append=F, layer='community_subtype_commercial_parcel_area_2014', append=F)
 
 sw_com14_area <- par14_muni |> 
   filter(parcel_type=='COM') |> 
@@ -1199,7 +1464,7 @@ mpo_com14_area <- par14_muni |>
   group_by(mpo) |> 
   summarize(com_area_m2 = sum(area_m2)) |> 
   rbind(sw_com14_area)
-st_write(mpo_com14_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_commercial_parcel_area_2014')
+st_write(mpo_com14_area, dsn=task_gdb2, append=F, layer='mpo_and_statewide_commercial_parcel_area_2014', append=F)
 
 
 # 2022 data
@@ -1208,19 +1473,19 @@ ct_res22_area <- par22_ct |>
   filter(parcel_type=='RES')  |> 
   group_by(ct20_id) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(ct_res22_area, dsn=task_gpkg, append=F, layer='tract_residential_parcel_area_2022')
+st_write(ct_res22_area, dsn=task_gdb2, append=F, layer='tract_residential_parcel_area_2022', append=F)
 
 muni_res22_area <- par22_muni |> 
   filter(parcel_type=='RES')  |> 
   group_by(muni_id,muni_name) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(muni_res22_area, dsn=task_gpkg, append=F, layer='muni_residential_parcel_area_2022')
+st_write(muni_res22_area, dsn=task_gdb2, append=F, layer='muni_residential_parcel_area_2022', append=F)
 
 cmsubtyp_res22_area <- par22_muni |> 
   filter(parcel_type=='RES')  |> 
   group_by(cmsbt08) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(cmsubtyp_res22_area, dsn=task_gpkg, append=F, layer='community_subtype_residential_parcel_area_2022')
+st_write(cmsubtyp_res22_area, dsn=task_gdb2, append=F, layer='community_subtype_residential_parcel_area_2022', append=F)
 
 sw_res22_area <- par22_muni |> 
   filter(parcel_type=='RES')  |> 
@@ -1232,26 +1497,26 @@ mpo_res22_area <- par22_muni |>
   group_by(mpo) |> 
   summarize(res_area_m2 = sum(area_m2)) |> 
   rbind(sw_res22_area)
-st_write(mpo_res22_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_residential_parcel_area_2022')
+st_write(mpo_res22_area, dsn=task_gdb2, append=F, layer='mpo_and_statewide_residential_parcel_area_2022', append=F)
 
 # Commercial
 ct_com22_area <- par22_ct |> 
   filter(parcel_type=='COM')  |> 
   group_by(ct20_id) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(ct_com22_area, dsn=task_gpkg, append=F, layer='tract_commercial_parcel_area_2022')
+st_write(ct_com22_area, dsn=task_gdb2, append=F, layer='tract_commercial_parcel_area_2022', append=F)
 
 muni_com22_area <- par22_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(muni_id,muni_name) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(muni_com22_area, dsn=task_gpkg, append=F, layer='muni_commercial_parcel_area_2022')
+st_write(muni_com22_area, dsn=task_gdb2, append=F, layer='muni_commercial_parcel_area_2022', append=F)
 
 cmsubtyp_com22_area <- par22_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(cmsbt08) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(cmsubtyp_com22_area, dsn=task_gpkg, append=F, layer='community_subtype_commercial_parcel_area_2022')
+st_write(cmsubtyp_com22_area, dsn=task_gdb2, append=F, layer='community_subtype_commercial_parcel_area_2022', append=F)
 
 sw_com22_area <- par22_muni |> 
   filter(parcel_type=='COM')  |> 
@@ -1263,7 +1528,7 @@ mpo_com22_area <- par22_muni |>
   group_by(mpo) |> 
   summarize(com_area_m2 = sum(area_m2)) |> 
   rbind(sw_com22_area)
-st_write(mpo_com22_area, dsn=task_gpkg, append=F, layer='mpo_and_statewide_commercial_parcel_area_2022')
+st_write(mpo_com22_area, dsn=task_gdb2, layer='mpo_and_statewide_commercial_parcel_area_2022', append=F)
 
 
 ```
@@ -1610,10 +1875,15 @@ st_write(met.dev.com.ct, dsn=task_gpkg, layer = 'emp_nlcd_dev_in_com_acre_tract'
 
 
 ```
-# 11 - Muni+ Metrics
+# 11 - Muni Denominators
 
 ```{r}
 
+msf <- st_read(dsn=task_gdb2,layer='munis_no_coast') |> 
+  rename(muni_id = TOWN_ID) |> 
+  select(muni_id,SHAPE) |> 
+  left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,muni_name,mpo,cmsbt08), by='muni_id') %>%
+  mutate(muni_acres = as.numeric(st_area(.)) * 0.000247105)
 
 # Parcel denominators
 res14.muni <- st_read(dsn=task_gpkg, layer='muni_residential_parcel_area_2014') |> 
@@ -1723,7 +1993,11 @@ dev.com23.muni <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_commercial_
   summarize(dev_com_acres_2023 = sum(dev_com_acres_2023))
 saveRDS(dev.com23.muni,paste0(sp_path,'nlcd2023_dev_com_muni.rds'))
 
+```
 
+# 12 - Muni Metrics
+
+```{r}
 # Muni Metrics
 
 # Merge numerators and calculate metrics
@@ -1745,10 +2019,13 @@ met.muni <- left_join(
 
 met.muni[is.na(met.muni)] <- 0
 
+#
 # Metrics by parcel acreage of res/com
 met.res.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(
+    chg_res_acres = res_acres_2023 - res_acres_2014,
+    pct_chg_res_acres = round(100*(res_acres_2023 - res_acres_2014)/res_acres_2014,1),
     pop_acre_2014 = total_pop_2014 / res_acres_2014,
     hh_acre_2014 = total_households_2014 / res_acres_2014,
     units_acre_2014 = total_units_2014 / res_acres_2014,
@@ -1775,11 +2052,13 @@ met.res.muni <- met.muni |>
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
     )
 
-st_write(met.res.muni, dsn=task_gpkg, layer = 'pop_hh_unit_res_acre_muni')
+st_write(met.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_muni', append = F)
 
 met.com.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(
+    chg_com_acres = com_acres_2023 - com_acres_2014,
+    pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1),
     emp_acre_2014 = emp2014 / com_acres_2014,
     emp_sect_1_acre_2014 = emp_2014_sect_1 / com_acres_2014,
     emp_sect_2_acre_2014 = emp_2014_sect_2 / com_acres_2014,
@@ -1815,13 +2094,17 @@ met.com.muni <- met.muni |>
     chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
   )
 
-st_write(met.com.muni, dsn=task_gpkg, layer = 'emp_com_acre_muni')
+st_write(met.com.muni, dsn=task_gdb2, layer = 'emp_com_acre_muni', append=F)
 
 
 # Metrics by NLCD developed land acreage
 met.dev.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(
+    dev_acres_2014 = sum(dev_acres_2014),
+    dev_acres_2023 = sum(dev_acres_2023),
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1),
     pop_acre_2014 = sum(total_pop_2014) / sum(dev_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(dev_acres_2014),
     units_acre_2014 = sum(total_units_2014) / sum(dev_acres_2014),
@@ -1881,13 +2164,17 @@ met.dev.muni <- met.muni |>
     chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre
   )
 
-st_write(met.dev.muni, dsn=task_gpkg, layer = 'pop_hh_units_emp_dev_acre_muni')
+st_write(met.dev.muni, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_muni', append =F)
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
 met.dev.res.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(
+    dev_res_acres_2014 = sum(dev_res_acres_2014),
+    dev_res_acres_2023 = sum(dev_res_acres_2023),
+    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
+    pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1),
     pop_acre_2014 = sum(total_pop_2014) / sum(dev_res_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(dev_res_acres_2014),
     units_acre_2014 = sum(total_units_2014) / sum(dev_res_acres_2014),
@@ -1903,9 +2190,7 @@ met.dev.res.muni <- met.muni |>
     units_2_acre_2023 = sum(units_2_2023) / sum(dev_res_acres_2023),
     units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_res_acres_2023),
     units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_res_acres_2023),
-    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023)
-  ) |> 
-  summarize(
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023),
     chg_pop_acre = pop_acre_2023 - pop_acre_2014,
     chg_hh_acre = hh_acre_2023 - hh_acre_2014,
     chg_units_acre = units_acre_2023 - units_acre_2014,
@@ -1916,40 +2201,51 @@ met.dev.res.muni <- met.muni |>
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
     )
 
-st_write(met.dev.res.muni, dsn=task_gpkg, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_muni')
+st_write(met.dev.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_muni', append=F)
 
 met.dev.com.muni <- met.muni |> 
-  group_by(muni_id, muni_name, cmsbt08, mpo) |> 
+  group_by(muni_id, muni_name, cmsbt08, mpo) |>  
   summarize(
-    pop_acre_2014 = sum(total_pop_2014) / sum(dev_com_acres_2014),
-    hh_acre_2014 = sum(total_households_2014) / sum(dev_com_acres_2014),
-    units_acre_2014 = sum(total_units_2014) / sum(dev_com_acres_2014),
-    units_1_acre_2014 = sum(units_1_2014) / sum(dev_com_acres_2014),
-    units_2_acre_2014 = sum(units_2_2014) / sum(dev_com_acres_2014),
-    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(dev_com_acres_2014),
-    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(dev_com_acres_2014),
-    units_10p_acre_2014 = sum(units_10p_2014) / sum(dev_com_acres_2014),
-    pop_acre_2023 = sum(total_pop_2023) / sum(dev_com_acres_2023),
-    hh_acre_2023 = sum(total_households_2023) / sum(dev_com_acres_2023),
-    units_acre_2023 = sum(total_units_2023) / sum(dev_com_acres_2023),
-    units_1_acre_2023 = sum(units_1_2023) / sum(dev_com_acres_2023),
-    units_2_acre_2023 = sum(units_2_2023) / sum(dev_com_acres_2023),
-    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_com_acres_2023),
-    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_com_acres_2023),
-    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_com_acres_2023)
-  ) |> 
-  summarize(
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
-    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
-    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
-    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
-    )
+    dev_com_acres_2014 = sum(dev_com_acres_2014),
+    dev_com_acres_2023 = sum(dev_com_acres_2023),
+    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
+    pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1),
+    emp_acre_2014 = sum(emp2014) / sum(dev_com_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_com_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_com_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_com_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_com_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_com_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_com_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_com_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_com_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_com_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_com_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(dev_com_acres_2023),
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_com_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_com_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_com_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_com_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_com_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_com_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_com_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_com_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_com_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023),
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
+    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
+    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
+    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
+    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
+    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
+    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
+    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
+    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+  )
 
-st_write(met.dev.com.muni, dsn=task_gpkg, layer = 'emp_nlcd_dev_in_com_acre_muni')
+st_write(met.dev.com.muni, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_muni', append = F)
 
 ```
 
