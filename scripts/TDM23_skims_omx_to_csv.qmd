@@ -39,13 +39,18 @@ data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data
 scen3 <- 'Scenario_3'
 scen4 <- 'Scenario_4'
 
-scen <- scen4 
-skim_path <- file.path(data_path,scen,'Inputs/Skims')
+scen <- scen4
 
-skim3_path <- file.path(data_path,scen3,'Inputs/Skims')
-skim4_path <- file.path(data_path,scen4,'Inputs/Skims')
+# skim_path <- file.path(data_path,scen,'Inputs/Skims')
+# skim3_path <- file.path(data_path,scen3,'Inputs/Skims')
+# skim4_path <- file.path(data_path,scen4,'Inputs/Skims')
 
-# skim_path <- 'C:/Users/cgate/Desktop/Skims'
+
+skim3_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_3'
+skim4_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_4'
+
+skim_path <- file.path('C:/Users/cgate/Desktop/Skims',scen)
+
 # dir.create(skim_path, showWarnings = F)
 
 knitr::opts_knit$set(root.dir = data_path)
@@ -283,7 +288,7 @@ for (yr in c(base_prefix, int_prefix, plan_prefix)) {
            paste0('mapcm_skims_', yr, '.csv')))
     fwrite(swm, file.path(skim3_path,yr,
            paste0('swm_skims_', yr, '.csv')))
-    
+    message(paste(yr,'complete'))
 }
 
 
