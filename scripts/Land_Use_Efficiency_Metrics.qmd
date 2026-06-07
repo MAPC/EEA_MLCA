@@ -251,7 +251,7 @@ acs14.mpo <- acs14.muni |>
   ) |> 
   rbind(acs14.sw)
 
-setnames(acs14.muni, c(names(acs14.muni)[1:4],paste0(names(acs14.muni)[5:12],'_2014')))
+setnames(acs14.muni, c(names(acs14.muni)[1:4],paste0(names(acs14.muni)[5:12],'_2014'),'muni_acres'))
 
 ```
 
@@ -416,7 +416,7 @@ acs23.mpo <- acs23.muni |>
   ) |> 
   rbind(acs23.sw)
 
-setnames(acs23.muni, c(names(acs23.muni)[1:4],paste0(names(acs23.muni)[5:12],'_2023')))
+setnames(acs23.muni, c(names(acs23.muni)[1:4],paste0(names(acs23.muni)[5:12],'_2023'),'muni_acres'))
 
 ```
 
@@ -1409,19 +1409,19 @@ ct_res14_area <- par14_ct |>
   filter(parcel_type=='RES') |> 
   group_by(ct20_id) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(ct_res14_area, dsn=task_gdb2, append=F, layer='tract_residential_parcel_area_2014', append=F)
+saveRDS(ct_res14_area, paste0(sp_path, 'tract_residential_parcel_area_2014.rds'))
 
 muni_res14_area <- par14_muni |> 
   filter(parcel_type=='RES') |> 
   group_by(muni_id,muni_name) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(muni_res14_area, dsn=task_gdb2, append=F, layer='muni_residential_parcel_area_2014', append=F)
+saveRDS(muni_res14_area, paste0(sp_path, 'muni_residential_parcel_area_2014.rds'))
 
 cmsubtyp_res14_area <- par14_muni |> 
   filter(parcel_type=='RES') |> 
   group_by(cmsbt08) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(cmsubtyp_res14_area, dsn=task_gdb2, append=F, layer='community_subtype_residential_parcel_area_2014', append=F)
+saveRDS(cmsubtyp_res14_area, paste0(sp_path, 'community_subtype_residential_parcel_area_2014.rds'))
 
 sw_res14_area <- par14_muni |> 
   filter(parcel_type=='RES')  |> 
@@ -1433,26 +1433,26 @@ mpo_res14_area <- par14_muni |>
   group_by(mpo) |> 
   summarize(res_area_m2 = sum(area_m2)) |> 
   rbind(sw_res14_area)
-st_write(mpo_res14_area, dsn=task_gdb2, append=F, layer='mpo_and_statewide_residential_parcel_area_2014', append=F)
+saveRDS(mpo_res14_area, paste0(sp_path,'mpo_and_statewide_residential_parcel_area_2014.rds'))
 
 # Commercial
 ct_com14_area <- par14_ct |> 
   filter(parcel_type=='COM') |> 
   group_by(ct20_id) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(ct_com14_area, dsn=task_gdb2, append=F, layer='tract_commercial_parcel_area_2014', append=F)
+saveRDS(ct_com14_area, paste0(sp_path,'tract_commercial_parcel_area_2014.rds'))
 
 muni_com14_area <- par14_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(muni_id,muni_name) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(muni_com14_area, dsn=task_gdb2, append=F, layer='muni_commercial_parcel_area_2014', append=F)
+saveRDS(muni_com14_area, paste0(sp_path, 'muni_commercial_parcel_area_2014.rds'))
 
 cmsubtyp_com14_area <- par14_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(cmsbt08) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(cmsubtyp_com14_area, dsn=task_gdb2, append=F, layer='community_subtype_commercial_parcel_area_2014', append=F)
+saveRDS(cmsubtyp_com14_area, paste0(sp_path, 'community_subtype_commercial_parcel_area_2014.rds'))
 
 sw_com14_area <- par14_muni |> 
   filter(parcel_type=='COM') |> 
@@ -1464,28 +1464,28 @@ mpo_com14_area <- par14_muni |>
   group_by(mpo) |> 
   summarize(com_area_m2 = sum(area_m2)) |> 
   rbind(sw_com14_area)
-st_write(mpo_com14_area, dsn=task_gdb2, append=F, layer='mpo_and_statewide_commercial_parcel_area_2014', append=F)
+saveRDS(mpo_com14_area, paste0(sp_path,'mpo_and_statewide_commercial_parcel_area_2014.rds'))
 
 
 # 2022 data
 
 ct_res22_area <- par22_ct |> 
-  filter(parcel_type=='RES')  |> 
+  filter(parcel_type=='RES') |> 
   group_by(ct20_id) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(ct_res22_area, dsn=task_gdb2, append=F, layer='tract_residential_parcel_area_2022', append=F)
+saveRDS(ct_res22_area, paste0(sp_path, 'tract_residential_parcel_area_2022.rds'))
 
 muni_res22_area <- par22_muni |> 
-  filter(parcel_type=='RES')  |> 
+  filter(parcel_type=='RES') |> 
   group_by(muni_id,muni_name) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(muni_res22_area, dsn=task_gdb2, append=F, layer='muni_residential_parcel_area_2022', append=F)
+saveRDS(muni_res22_area, paste0(sp_path, 'muni_residential_parcel_area_2022.rds'))
 
 cmsubtyp_res22_area <- par22_muni |> 
-  filter(parcel_type=='RES')  |> 
+  filter(parcel_type=='RES') |> 
   group_by(cmsbt08) |> 
   summarize(res_area_m2 = sum(area_m2))
-st_write(cmsubtyp_res22_area, dsn=task_gdb2, append=F, layer='community_subtype_residential_parcel_area_2022', append=F)
+saveRDS(cmsubtyp_res22_area, paste0(sp_path, 'community_subtype_residential_parcel_area_2022.rds'))
 
 sw_res22_area <- par22_muni |> 
   filter(parcel_type=='RES')  |> 
@@ -1493,42 +1493,42 @@ sw_res22_area <- par22_muni |>
   mutate(mpo = 'STATEWIDE')
 
 mpo_res22_area <- par22_muni |> 
-  filter(parcel_type=='RES')  |> 
+  filter(parcel_type=='RES') |> 
   group_by(mpo) |> 
   summarize(res_area_m2 = sum(area_m2)) |> 
   rbind(sw_res22_area)
-st_write(mpo_res22_area, dsn=task_gdb2, append=F, layer='mpo_and_statewide_residential_parcel_area_2022', append=F)
+saveRDS(mpo_res22_area, paste0(sp_path,'mpo_and_statewide_residential_parcel_area_2022.rds'))
 
 # Commercial
 ct_com22_area <- par22_ct |> 
-  filter(parcel_type=='COM')  |> 
+  filter(parcel_type=='COM') |> 
   group_by(ct20_id) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(ct_com22_area, dsn=task_gdb2, append=F, layer='tract_commercial_parcel_area_2022', append=F)
+saveRDS(ct_com22_area, paste0(sp_path,'tract_commercial_parcel_area_2022.rds'))
 
 muni_com22_area <- par22_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(muni_id,muni_name) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(muni_com22_area, dsn=task_gdb2, append=F, layer='muni_commercial_parcel_area_2022', append=F)
+saveRDS(muni_com22_area, paste0(sp_path, 'muni_commercial_parcel_area_2022.rds'))
 
 cmsubtyp_com22_area <- par22_muni |> 
   filter(parcel_type=='COM')  |> 
   group_by(cmsbt08) |> 
   summarize(com_area_m2 = sum(area_m2))
-st_write(cmsubtyp_com22_area, dsn=task_gdb2, append=F, layer='community_subtype_commercial_parcel_area_2022', append=F)
+saveRDS(cmsubtyp_com22_area, paste0(sp_path, 'community_subtype_commercial_parcel_area_2022.rds'))
 
 sw_com22_area <- par22_muni |> 
-  filter(parcel_type=='COM')  |> 
+  filter(parcel_type=='COM') |> 
   summarize(com_area_m2 = sum(area_m2)) |> 
   mutate(mpo = 'STATEWIDE')
 
 mpo_com22_area <- par22_muni |> 
-  filter(parcel_type=='COM') |> 
+  filter(parcel_type=='COM')  |> 
   group_by(mpo) |> 
   summarize(com_area_m2 = sum(area_m2)) |> 
   rbind(sw_com22_area)
-st_write(mpo_com22_area, dsn=task_gdb2, layer='mpo_and_statewide_commercial_parcel_area_2022', append=F)
+saveRDS(mpo_com22_area, paste0(sp_path,'mpo_and_statewide_commercial_parcel_area_2022.rds'))
 
 
 ```
@@ -1537,7 +1537,7 @@ st_write(mpo_com22_area, dsn=task_gdb2, layer='mpo_and_statewide_commercial_parc
 ```{r}
 
 # Parcel denominators
-res14.tract <- st_read(dsn=task_gpkg, layer='tract_residential_parcel_area_2014') |> 
+res14.tract <- readRDS(paste0(sp_path, 'tract_residential_parcel_area_2014.rds')) |> 
   mutate(
     res_acres_2014 = res_area_m2 * 0.000247105,
     ct20_id = as.character(ct20_id)
@@ -1545,7 +1545,7 @@ res14.tract <- st_read(dsn=task_gpkg, layer='tract_residential_parcel_area_2014'
   st_drop_geometry() |> 
   select(ct20_id, res_acres_2014)
 
-com14.tract <- st_read(dsn=task_gpkg, layer='tract_commercial_parcel_area_2014') |> 
+com14.tract <- readRDS(paste0(sp_path, 'tract_commercial_parcel_area_2014.rds')) |> 
   mutate(
     com_acres_2014 = com_area_m2 * 0.000247105,
     ct20_id = as.character(ct20_id)
@@ -1553,7 +1553,7 @@ com14.tract <- st_read(dsn=task_gpkg, layer='tract_commercial_parcel_area_2014')
   st_drop_geometry() |> 
   select(ct20_id, com_acres_2014)
 
-res23.tract <- st_read(dsn=task_gpkg, layer='tract_residential_parcel_area_2022') |> 
+res23.tract <- readRDS(paste0(sp_path, 'tract_residential_parcel_area_2022.rds')) |> 
   mutate(
     res_acres_2023 = res_area_m2 * 0.000247105,
     ct20_id = as.character(ct20_id)
@@ -1561,7 +1561,7 @@ res23.tract <- st_read(dsn=task_gpkg, layer='tract_residential_parcel_area_2022'
   st_drop_geometry() |> 
   select(ct20_id, res_acres_2023)
 
-com23.tract <- st_read(dsn=task_gpkg, layer='tract_commercial_parcel_area_2022') |> 
+com23.tract <- readRDS(paste0(sp_path, 'tract_commercial_parcel_area_2022.rds')) |> 
   mutate(
     com_acres_2023 = com_area_m2 * 0.000247105,
     ct20_id = as.character(ct20_id)
@@ -1689,7 +1689,10 @@ met.res.ct <- met.ct |>
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023),
+    chg_MF_units_acre = units_MF_acre_2023 = units_MF_acre_2014
     )
 
 st_write(met.res.ct, dsn=task_gpkg, layer = 'pop_hh_unit_res_acre_tract')
@@ -1755,6 +1758,9 @@ met.dev.ct <- met.ct |>
     units_3_4_acre_2023 = units_3_4_2023 / dev_acres_2023,
     units_5_9_acre_2023 = units_5_9_2023 / dev_acres_2023,
     units_10p_acre_2023 = units_10p_2023 / dev_acres_2023,
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023),
+    chg_MF_units_acre = units_MF_acre_2023 = units_MF_acre_2014,
     chg_pop_acre = pop_acre_2023 - pop_acre_2014,
     chg_hh_acre = hh_acre_2023 - hh_acre_2014,
     chg_units_acre = units_acre_2023 - units_acre_2014,
@@ -1828,7 +1834,10 @@ met.dev.res.ct <- met.ct |>
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023),
+    chg_MF_units_acre = units_MF_acre_2023 = units_MF_acre_2014
     )
 
 st_write(met.dev.res.ct, dsn=task_gpkg, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_tract', append = FALSE)
@@ -1886,7 +1895,7 @@ msf <- st_read(dsn=task_gdb2,layer='munis_no_coast') |>
   mutate(muni_acres = as.numeric(st_area(.)) * 0.000247105)
 
 # Parcel denominators
-res14.muni <- st_read(dsn=task_gpkg, layer='muni_residential_parcel_area_2014') |> 
+res14.muni <- readRDS(paste0(sp_path, 'muni_residential_parcel_area_2014.rds')) |> 
   left_join(munis |> select(muni_id,mpo,cmsbt08,muni_acres), by = 'muni_id') |> 
   mutate(
     res_acres_2014 = res_area_m2 * 0.000247105,
@@ -1895,7 +1904,7 @@ res14.muni <- st_read(dsn=task_gpkg, layer='muni_residential_parcel_area_2014') 
   st_drop_geometry() |> 
   select(muni_id, muni_name, cmsbt08, mpo, res_acres_2014, res_frac)
 
-com14.muni <- st_read(dsn=task_gpkg, layer='muni_commercial_parcel_area_2014') |> 
+com14.muni <- readRDS(paste0(sp_path, 'muni_commercial_parcel_area_2014.rds')) |> 
   left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   mutate(
     com_acres_2014 = com_area_m2 * 0.000247105
@@ -1903,7 +1912,7 @@ com14.muni <- st_read(dsn=task_gpkg, layer='muni_commercial_parcel_area_2014') |
   st_drop_geometry() |> 
   select(muni_id, muni_name, cmsbt08, mpo, com_acres_2014)
 
-res23.muni <- st_read(dsn=task_gpkg, layer='muni_residential_parcel_area_2022') |> 
+res23.muni <- readRDS(paste0(sp_path, 'muni_residential_parcel_area_2022.rds')) |> 
   left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   mutate(
     res_acres_2023 = res_area_m2 * 0.000247105
@@ -1911,7 +1920,7 @@ res23.muni <- st_read(dsn=task_gpkg, layer='muni_residential_parcel_area_2022') 
   st_drop_geometry() |> 
   select(muni_id, muni_name, cmsbt08, mpo, res_acres_2023)
 
-com23.muni <- st_read(dsn=task_gpkg, layer='muni_commercial_parcel_area_2022') |> 
+com23.muni <- readRDS(paste0(sp_path, 'muni_commercial_parcel_area_2022.rds')) |> 
   left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   mutate(
     com_acres_2023 = com_area_m2 * 0.000247105
@@ -2049,7 +2058,10 @@ met.res.muni <- met.muni |>
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023),
+    chg_MF_units_acre = units_MF_acre_2023 - units_MF_acre_2014
     )
 
 st_write(met.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_muni', append = F)
@@ -2151,6 +2163,9 @@ met.dev.muni <- met.muni |>
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023),
+    chg_MF_units_acre = units_MF_acre_2023 - units_MF_acre_2014,
     chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
     chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
@@ -2198,7 +2213,10 @@ met.dev.res.muni <- met.muni |>
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023),
+    chg_MF_units_acre = units_MF_acre_2023 - units_MF_acre_2014
     )
 
 st_write(met.dev.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_muni', append=F)

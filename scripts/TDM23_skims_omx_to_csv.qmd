@@ -194,7 +194,6 @@ for (yr in c(plan_prefix)) {
 
 ```
 
-
 # 5 - Modify skims for EEA Scenario 3
 
 ```{r}
@@ -231,8 +230,12 @@ for (yr in c(base_prefix, int_prefix, plan_prefix)) {
         ivtt_xbus = ivtt_xbus * .95,
         ivtt_rta = ivtt_rta * .95,
         ivtt_rb = ivtt_rb * .95,
-        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus
-      ) |> 
+        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus,
+      iwait = case_when(
+        ivtt_cr > 0 & (iwait * 0.75) < 15 ~ (iwait * 0.75),
+        ivtt_cr > 0 & (iwait * 0.75) > 15 & iwait > 15 ~ 15,
+        .default = iwait)
+    ) |>
       setDT()
     wat[, wat_am_totcost := Fare + (ivtt / 60 * 18.50) + (iwait + walk + xwait) /
         60 * 18.5 * 3]
@@ -307,8 +310,8 @@ zid <- fread(paste0(skim4_path,'/swm_zone_ids.csv'))
 cong.taz <- fread(paste0(skim4_path, '/congestion_zone_taz.csv')) |> pull(tazID) |> unique()
 
 
-# for (yr in c(base_prefix, int_prefix, plan_prefix)) {
-for (yr in c(plan_prefix)) {    
+for (yr in c(base_prefix, int_prefix, plan_prefix)) {
+#for (yr in c(plan_prefix)) {    
   
     # SOV / Passenger vehicle
     hwy <- fread(file.path(skim4_path, yr, 'hwy_am.csv'))
@@ -328,7 +331,11 @@ for (yr in c(plan_prefix)) {
         ivtt_xbus = ivtt_xbus * .9,
         ivtt_rta = ivtt_rta * .9,
         ivtt_rb = ivtt_rb * .9,
-        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus
+        ivtt = ivtt_brt + ivtt_cr + ivtt_fr + ivtt_hrt + ivtt_lbus + ivtt_lrt + ivtt_rb + ivtt_rta + ivtt_sh + ivtt_xbus,
+        iwait = case_when(
+          ivtt_cr > 0 & (iwait * 0.5) < 10 ~ (iwait * 0.5),
+          ivtt_cr > 0 & (iwait * 0.5) > 10 & iwait > 10 ~ 10,
+          .default = iwait)
       ) |> 
       setDT()
     wat[, wat_am_totcost := Fare + (ivtt / 60 * 18.50) + (iwait + walk + xwait) /

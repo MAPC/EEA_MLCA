@@ -101,7 +101,7 @@ tod[,max_far_inter:=max(max_far),FID_Rail_stations_buffer]
 tod[,max_dua_inter:=max(max_dua),FID_Rail_stations_buffer]
 
 tod.tab <- tod[,.(FID_Rail_stations_buffer,max_dua_inter,max_far_inter,Shape)]
-tod.tab[max_dua_inter<100 & , max_dua_inter:=100]
+tod.tab[max_dua_inter<100 & max_dua_inter>0, max_dua_inter:=100]
 tod.tab[,zoning:='TOD_DUA100']
 setnames(tod.tab,c('id','max_dua','max_far','zoning','Shape'))
 
@@ -136,7 +136,7 @@ mb.raw <- st_read(
 
 mb30 <- mb.raw |>
   st_drop_geometry() |>
-  filter(start_year>2030) |>
+  filter(start_year>2024) |>
   select(identification, start_year, residential_units, employment_capacity) |>
   mutate(res_proj=case_when(
     residential_units>0 ~ 1,
