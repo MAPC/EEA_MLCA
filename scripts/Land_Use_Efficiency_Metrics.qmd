@@ -67,6 +67,10 @@ knitr::opts_knit$set(root.dir = data_path)
 
 ```{r}
 
+munis <- mapcdatakeys::all_muni_data_keys |> 
+  select(muni_id,muni_name,cosub_5y14,cosub_5y23,cmsbt08,mpo) |> 
+  mutate(cosub_5y14 = as.character(cosub_5y14),
+         cosub_5y23 = as.character(cosub_5y23))
 
 # NEED TO SWITCH TO 2020 TRACT + MUNI GEOGRAPHIES for the 2014 data
 # AND SWITCH BACK THE 2023 DATA to 2020 tracts as well
@@ -251,7 +255,7 @@ acs14.mpo <- acs14.muni |>
   ) |> 
   rbind(acs14.sw)
 
-setnames(acs14.muni, c(names(acs14.muni)[1:4],paste0(names(acs14.muni)[5:12],'_2014'),'muni_acres'))
+setnames(acs14.muni, c(names(acs14.muni)[1:4],paste0(names(acs14.muni)[5:12],'_2014')))
 
 ```
 
@@ -416,7 +420,7 @@ acs23.mpo <- acs23.muni |>
   ) |> 
   rbind(acs23.sw)
 
-setnames(acs23.muni, c(names(acs23.muni)[1:4],paste0(names(acs23.muni)[5:12],'_2023'),'muni_acres'))
+setnames(acs23.muni, c(names(acs23.muni)[1:4],paste0(names(acs23.muni)[5:12],'_2023')))
 
 ```
 
@@ -1274,8 +1278,8 @@ com.codes <- c(
 
 # luc.tbl <- data.table(res_codes = as.character(res.codes), com_codes = as.character(com.codes))
 # 2014 layers
-# m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014') |> 
-m14 <- m14m |> mutate(
+m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014_fixed') |>
+  mutate(
     parcel_type = case_when(
       MIN_LUCA %in% as.character(res.codes) ~ 'RES',
       MIN_LUCA %in% as.character(com.codes) ~ 'COM'    
@@ -1287,17 +1291,16 @@ res14 <- m14 |>
   filter(parcel_type == 'RES') |> 
   select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
   rename(parcel_area_m2 = Shape_Area)
-st_write(res14, dsn=task_gpkg, layer='residential_parcel_area_2014', append = F)
+st_write(res14, dsn=task_gdb2, layer='residential_parcel_area_2014', append = F)
 
 com14 <- m14 |> 
   filter(parcel_type == 'COM') |> 
   select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
   rename(parcel_area_m2 = Shape_Area)
-st_write(com14, dsn=task_gpkg, layer='commercial_parcel_area_2014', append = F)
+st_write(com14, dsn=task_gdb2, layer='commercial_parcel_area_2014', append = F)
 
 # 2022 layers
-# m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022') |> 
-m22 <- m22m |>
+m22 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2022_fixed') |>
   mutate(
     parcel_type = case_when(
       MIN_LUCA %in% as.character(res.codes) ~ 'RES',
@@ -1312,13 +1315,13 @@ res22 <- m22 |>
   filter(parcel_type == 'RES') |> 
   select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
   rename(parcel_area_m2 = Shape_Area)
-st_write(res22, dsn=task_gpkg, layer='residential_parcel_area_2022', append = F)
+st_write(res22, dsn=task_gdb2, layer='residential_parcel_area_2022', append = F)
 
 com22 <- m22 |> 
   filter(parcel_type == 'COM') |> 
   select(LOC_ID,MIN_LUCA,MAX_LUCA,LUCA_DES_L,LUCA_SYMB,Shape_Area) |> 
   rename(parcel_area_m2 = Shape_Area)
-st_write(com22, dsn=task_gpkg, layer='commercial_parcel_area_2022', append = F)
+st_write(com22, dsn=task_gdb2, layer='commercial_parcel_area_2022', append = F)
 
 ```
 
@@ -1330,7 +1333,7 @@ from arcpy import env
 arcpy.env.overwriteOutput = True
 
 # Set environment settings
-arcpy.env.workspace = r.task_gdb
+arcpy.env.workspace = r.task_gdb2
 
 arcpy.analysis.PairwiseClip(
     in_features="nlcd2014_developed_area",
@@ -1366,6 +1369,7 @@ arcpy.analysis.PairwiseClip(
 ```
 
 # 9 - Summarize RES/COM parcel areas to Tract/Muni/Community Subtype/MPO/State
+
 ```{r}
 
 ct20 <- mapcdatakeys::tract_sf(2020)
@@ -1373,9 +1377,9 @@ msf <- mapcdatakeys::muni_sf(2020) |>
   left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,cmsbt08), by = 'muni_id') %>%
   mutate(muni_acres = st_area(.) * 0.000247105)
 munis <- munis |> left_join(msf |> st_drop_geometry() |> select(muni_id,muni_acres), by='muni_id')
-# 
-# m14 <- readRDS(paste0(sp_path, 'parcels_combine_2014.rds'))
-# m22 <- readRDS(paste0(sp_path, 'parcels_combine_2022.rds'))
+
+m14 <- readRDS(paste0(sp_path, 'parcels_combine_2014.rds'))
+m22 <- readRDS(paste0(sp_path, 'parcels_combine_2022.rds'))
 
 # Tract, Muni, Community Subtype, MPO, Statewide summaries
 
@@ -1390,6 +1394,7 @@ par14_muni <- st_intersection(m14,msf) %>%
   st_cast(., 'MULTIPOLYGON')%>%
   mutate(area_m2 = st_area(.))
 saveRDS(par14_muni, paste0(sp_path,'parcel2014_muni_inter.rds'))
+
 
 par22_ct <- st_intersection(m22,ct20) %>%
   st_make_valid(.) %>%
@@ -1417,7 +1422,7 @@ muni_res14_area <- par14_muni |>
   summarize(res_area_m2 = sum(area_m2))
 saveRDS(muni_res14_area, paste0(sp_path, 'muni_residential_parcel_area_2014.rds'))
 
-cmsubtyp_res14_area <- par14_muni |> 
+`cmsubtyp_res14_area <- par14_muni |> 
   filter(parcel_type=='RES') |> 
   group_by(cmsbt08) |> 
   summarize(res_area_m2 = sum(area_m2))
@@ -1532,7 +1537,8 @@ saveRDS(mpo_com22_area, paste0(sp_path,'mpo_and_statewide_commercial_parcel_area
 
 
 ```
-# 10 - Tract Metrics
+
+# 10a - Tract Denominators
 
 ```{r}
 
@@ -1643,6 +1649,9 @@ dev.com23.tract <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_commercial
   summarize(dev_com_acres_2023 = sum(dev_com_acres_2023))
 saveRDS(dev.com23.tract,paste0(sp_path,'nlcd2023_dev_com_tract.rds'))
 
+```
+# 10b - Tract Metrics
+```{r}
 # Merge numerators and calculate metrics
 
 met.ct <- left_join(
@@ -1682,20 +1691,25 @@ met.res.ct <- met.ct |>
     units_3_4_acre_2023 = units_3_4_2023 / res_acres_2023,
     units_5_9_acre_2023 = units_5_9_2023 / res_acres_2023,
     units_10p_acre_2023 = units_10p_2023 / res_acres_2023,
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023),
-    chg_MF_units_acre = units_MF_acre_2023 = units_MF_acre_2014
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014
     )
 
-st_write(met.res.ct, dsn=task_gpkg, layer = 'pop_hh_unit_res_acre_tract')
+st_write(met.res.ct, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_tract', append=F)
 
 met.com.ct <- met.ct |> 
   group_by(ct20_id) |> 
@@ -1722,7 +1736,6 @@ met.com.ct <- met.ct |>
     emp_sect_8_acre_2023 = emp_2023_sect_8 / com_acres_2023,
     emp_sect_9_acre_2023 = emp_2023_sect_9 / com_acres_2023,
     emp_sect_10_acre_2023 = emp_2023_sect_10 / com_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
     chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
     chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
@@ -1732,10 +1745,12 @@ met.com.ct <- met.ct |>
     chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
     chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
     chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014
   )
 
-st_write(met.com.ct, dsn=task_gpkg, layer = 'emp_com_acre_tract')
+st_write(met.com.ct, dsn=task_gdb2, layer = 'emp_com_acre_tract', append=F)
 
 
 # Metrics by NLCD developed land acreage
@@ -1760,11 +1775,6 @@ met.dev.ct <- met.ct |>
     units_10p_acre_2023 = units_10p_2023 / dev_acres_2023,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023),
-    chg_MF_units_acre = units_MF_acre_2023 = units_MF_acre_2014,
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
@@ -1791,7 +1801,6 @@ met.dev.ct <- met.ct |>
     emp_sect_8_acre_2023 = emp_2023_sect_8 / dev_acres_2023,
     emp_sect_9_acre_2023 = emp_2023_sect_9 / dev_acres_2023,
     emp_sect_10_acre_2023 = emp_2023_sect_10 / dev_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
     chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
     chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
@@ -1801,10 +1810,22 @@ met.dev.ct <- met.ct |>
     chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
     chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
     chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014
   )
 
-st_write(met.dev.ct, dsn=task_gpkg, layer = 'pop_hh_units_emp_dev_acre_tract')
+st_write(met.dev.ct, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_tract', append=F)
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
@@ -1827,20 +1848,25 @@ met.dev.res.ct <- met.ct |>
     units_3_4_acre_2023 = units_3_4_2023 / dev_res_acres_2023,
     units_5_9_acre_2023 = units_5_9_2023 / dev_res_acres_2023,
     units_10p_acre_2023 = units_10p_2023 / dev_res_acres_2023,
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023),
-    chg_MF_units_acre = units_MF_acre_2023 = units_MF_acre_2014
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014
     )
 
-st_write(met.dev.res.ct, dsn=task_gpkg, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_tract', append = FALSE)
+st_write(met.dev.res.ct, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_tract', append = FALSE)
 
 met.dev.com.ct <- met.ct |> 
   group_by(ct20_id) |> 
@@ -1867,7 +1893,6 @@ met.dev.com.ct <- met.ct |>
     emp_sect_8_acre_2023 = emp_2023_sect_8 / dev_com_acres_2023,
     emp_sect_9_acre_2023 = emp_2023_sect_9 / dev_com_acres_2023,
     emp_sect_10_acre_2023 = emp_2023_sect_10 / dev_com_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
     chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
     chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
@@ -1877,14 +1902,17 @@ met.dev.com.ct <- met.ct |>
     chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
     chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
     chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014
   )
 
-st_write(met.dev.com.ct, dsn=task_gpkg, layer = 'emp_nlcd_dev_in_com_acre_tract')
+st_write(met.dev.com.ct, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_tract', append=F)
 
 
 ```
-# 11 - Muni Denominators
+
+# 11a - Muni Denominators
 
 ```{r}
 
@@ -1893,6 +1921,13 @@ msf <- st_read(dsn=task_gdb2,layer='munis_no_coast') |>
   select(muni_id,SHAPE) |> 
   left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,muni_name,mpo,cmsbt08), by='muni_id') %>%
   mutate(muni_acres = as.numeric(st_area(.)) * 0.000247105)
+
+munis <-  st_read(dsn=task_gdb2,layer='munis_no_coast') |> 
+  rename(muni_id = TOWN_ID) |> 
+  select(muni_id,SHAPE) |> 
+  left_join(mapcdatakeys::all_muni_data_keys |> select(muni_id,muni_name,mpo,cmsbt08), by='muni_id') %>%
+  mutate(muni_acres = as.numeric(st_area(.)) * 0.000247105) |> 
+  setDT()
 
 # Parcel denominators
 res14.muni <- readRDS(paste0(sp_path, 'muni_residential_parcel_area_2014.rds')) |> 
@@ -1946,57 +1981,53 @@ nlcd23.muni <- readRDS(paste0(sp_path, 'nlcd2023_dev_area_muni.rds')) |>
   select(muni_id, muni_name, cmsbt08, mpo, dev_acres_2023)
 
 # NLCD within parcel denominators
-dev.res14.muni <- st_read(dsn=task_gdb, layer='nlcd2014_developed_in_residential_parcel') %>% 
-  st_transform(crs=st_crs(ct20)) %>%
-  st_intersection(ct20) %>%
+dev.res14.muni <- st_read(dsn=task_gdb2, layer='nlcd2014_developed_in_residential_parcel') %>% 
+  st_transform(crs=st_crs(msf)) %>%
+  st_intersection(msf) %>%
   mutate(
     area_m2 = st_area(.),
     dev_res_acres_2014 = as.numeric(area_m2) * 0.000247105
     ) |>
   st_drop_geometry() |> 
-  left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   select(muni_id, muni_name, cmsbt08, mpo, dev_res_acres_2014) |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(dev_res_acres_2014 = sum(dev_res_acres_2014))
 saveRDS(dev.res14.muni,paste0(sp_path,'nlcd2014_dev_res_muni.rds'))
 
-dev.com14.muni <- st_read(dsn=task_gdb, layer='nlcd2014_developed_in_commercial_parcel') %>% 
-  st_transform(crs=st_crs(ct20)) %>%
-  st_intersection(ct20) %>%
+dev.com14.muni <- st_read(dsn=task_gdb2, layer='nlcd2014_developed_in_commercial_parcel') %>% 
+  st_transform(crs=st_crs(msf)) %>%
+  st_intersection(msf) %>%
   mutate(
     area_m2 = st_area(.),
     dev_com_acres_2014 = as.numeric(area_m2) * 0.000247105
     ) |>
   st_drop_geometry() |> 
-  left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   select(muni_id, muni_name, cmsbt08, mpo, dev_com_acres_2014) |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(dev_com_acres_2014 = sum(dev_com_acres_2014))
 saveRDS(dev.com14.muni,paste0(sp_path,'nlcd2014_dev_com_muni.rds'))
 
-dev.res23.muni <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_residential_parcel') %>% 
-  st_transform(crs=st_crs(ct20)) %>%
-  st_intersection(ct20) %>%
+dev.res23.muni <- st_read(dsn=task_gdb2, layer='nlcd2023_developed_in_residential_parcel') %>% 
+  st_transform(crs=st_crs(msf)) %>%
+  st_intersection(msf) %>%
   mutate(
     area_m2 = st_area(.),
     dev_res_acres_2023 = as.numeric(area_m2) * 0.000247105
     ) |>
   st_drop_geometry() |> 
-  left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   select(muni_id, muni_name, cmsbt08, mpo, dev_res_acres_2023) |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(dev_res_acres_2023 = sum(dev_res_acres_2023))
 saveRDS(dev.res23.muni,paste0(sp_path,'nlcd2023_dev_res_muni.rds'))
 
-dev.com23.muni <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_commercial_parcel') %>% 
-  st_transform(crs=st_crs(ct20)) %>%
-  st_intersection(ct20) %>%
+dev.com23.muni <- st_read(dsn=task_gdb2, layer='nlcd2023_developed_in_commercial_parcel') %>% 
+  st_transform(crs=st_crs(msf)) %>%
+  st_intersection(msf) %>%
   mutate(
     area_m2 = st_area(.),
     dev_com_acres_2023 = as.numeric(area_m2) * 0.000247105
     ) |>
   st_drop_geometry() |> 
-  left_join(munis |> select(muni_id,mpo,cmsbt08), by = 'muni_id') |> 
   select(muni_id, muni_name, cmsbt08, mpo, dev_com_acres_2023) |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(dev_com_acres_2023 = sum(dev_com_acres_2023))
@@ -2004,7 +2035,7 @@ saveRDS(dev.com23.muni,paste0(sp_path,'nlcd2023_dev_com_muni.rds'))
 
 ```
 
-# 12 - Muni Metrics
+# 12b - Muni Metrics
 
 ```{r}
 # Muni Metrics
@@ -2033,8 +2064,6 @@ met.muni[is.na(met.muni)] <- 0
 met.res.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(
-    chg_res_acres = res_acres_2023 - res_acres_2014,
-    pct_chg_res_acres = round(100*(res_acres_2023 - res_acres_2014)/res_acres_2014,1),
     pop_acre_2014 = total_pop_2014 / res_acres_2014,
     hh_acre_2014 = total_households_2014 / res_acres_2014,
     units_acre_2014 = total_units_2014 / res_acres_2014,
@@ -2051,17 +2080,24 @@ met.res.muni <- met.muni |>
     units_3_4_acre_2023 = units_3_4_2023 / res_acres_2023,
     units_5_9_acre_2023 = units_5_9_2023 / res_acres_2023,
     units_10p_acre_2023 = units_10p_2023 / res_acres_2023,
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023),
-    chg_MF_units_acre = units_MF_acre_2023 - units_MF_acre_2014
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_res_acres = res_acres_2023 - res_acres_2014,
+    pct_chg_res_acres = round(100*(res_acres_2023 - res_acres_2014)/res_acres_2014,1)
     )
 
 st_write(met.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_muni', append = F)
@@ -2069,8 +2105,6 @@ st_write(met.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_muni', appen
 met.com.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
   summarize(
-    chg_com_acres = com_acres_2023 - com_acres_2014,
-    pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1),
     emp_acre_2014 = emp2014 / com_acres_2014,
     emp_sect_1_acre_2014 = emp_2014_sect_1 / com_acres_2014,
     emp_sect_2_acre_2014 = emp_2014_sect_2 / com_acres_2014,
@@ -2093,7 +2127,6 @@ met.com.muni <- met.muni |>
     emp_sect_8_acre_2023 = emp_2023_sect_8 / com_acres_2023,
     emp_sect_9_acre_2023 = emp_2023_sect_9 / com_acres_2023,
     emp_sect_10_acre_2023 = emp_2023_sect_10 / com_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
     chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
     chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
@@ -2103,7 +2136,11 @@ met.com.muni <- met.muni |>
     chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
     chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
     chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_com_acres = com_acres_2023 - com_acres_2014,
+    pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1)
   )
 
 st_write(met.com.muni, dsn=task_gdb2, layer = 'emp_com_acre_muni', append=F)
@@ -2115,8 +2152,6 @@ met.dev.muni <- met.muni |>
   summarize(
     dev_acres_2014 = sum(dev_acres_2014),
     dev_acres_2023 = sum(dev_acres_2023),
-    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
-    pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1),
     pop_acre_2014 = sum(total_pop_2014) / sum(dev_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(dev_acres_2014),
     units_acre_2014 = sum(total_units_2014) / sum(dev_acres_2014),
@@ -2155,18 +2190,12 @@ met.dev.muni <- met.muni |>
     emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_acres_2023),
     emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_acres_2023),
     emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_acres_2023),
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023),
-    chg_MF_units_acre = units_MF_acre_2023 - units_MF_acre_2014,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
     chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
     chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
@@ -2176,7 +2205,21 @@ met.dev.muni <- met.muni |>
     chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
     chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
     chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
-    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1)
   )
 
 st_write(met.dev.muni, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_muni', append =F)
@@ -2188,8 +2231,6 @@ met.dev.res.muni <- met.muni |>
   summarize(
     dev_res_acres_2014 = sum(dev_res_acres_2014),
     dev_res_acres_2023 = sum(dev_res_acres_2023),
-    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
-    pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1),
     pop_acre_2014 = sum(total_pop_2014) / sum(dev_res_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(dev_res_acres_2014),
     units_acre_2014 = sum(total_units_2014) / sum(dev_res_acres_2014),
@@ -2206,28 +2247,34 @@ met.dev.res.muni <- met.muni |>
     units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_res_acres_2023),
     units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_res_acres_2023),
     units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023),
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023),
-    chg_MF_units_acre = units_MF_acre_2023 - units_MF_acre_2014
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
+    pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1)
     )
 
 st_write(met.dev.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_muni', append=F)
+
 
 met.dev.com.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |>  
   summarize(
     dev_com_acres_2014 = sum(dev_com_acres_2014),
     dev_com_acres_2023 = sum(dev_com_acres_2023),
-    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
-    pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1),
     emp_acre_2014 = sum(emp2014) / sum(dev_com_acres_2014),
     emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_com_acres_2014),
     emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_com_acres_2014),
@@ -2250,7 +2297,6 @@ met.dev.com.muni <- met.muni |>
     emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_com_acres_2023),
     emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_com_acres_2023),
     emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023),
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
     chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
     chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
@@ -2260,7 +2306,11 @@ met.dev.com.muni <- met.muni |>
     chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
     chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
     chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
+    pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1)
   )
 
 st_write(met.dev.com.muni, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_muni', append = F)
@@ -2273,42 +2323,58 @@ st_write(met.dev.com.muni, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_muni
 # Community Subtype
 
 # Metrics by parcel acreage of res/com
-met.res.cmsbt08 <- met.res.muni |> 
+# Metrics by parcel acreage of res/com
+
+met.res.cmsbt08 <- met.muni |> 
   group_by(cmsbt08) |> 
   summarize(
+    res_acres_2014 = sum(res_acres_2014),
+    res_acres_2023 = sum(res_acres_2023),
     pop_acre_2014 = sum(total_pop_2014) / sum(res_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(res_acres_2014),
-    units_acre_2014 = sum(total_units_2014 ) / sum( res_acres_2014),
-    units_1_acre_2014 = sum(units_1_2014 ) / sum( res_acres_2014),
-    units_2_acre_2014 = sum(units_2_2014 ) / sum( res_acres_2014),
-    units_3_4_acre_2014 = sum(units_3_4_2014 ) / sum( res_acres_2014),
-    units_5_9_acre_2014 = sum(units_5_9_2014 ) / sum( res_acres_2014),
-    units_10p_acre_2014 = sum(units_10p_2014 ) / sum( res_acres_2014),
-    pop_acre_2023 = sum(total_pop_2023 ) / sum( res_acres_2023),
-    hh_acre_2023 = sum(total_households_2023 ) / sum( res_acres_2023),
-    units_acre_2023 = sum(total_units_2023 ) / sum( res_acres_2023),
-    units_1_acre_2023 = sum(units_1_2023 ) / sum( res_acres_2023),
-    units_2_acre_2023 = sum(units_2_2023 ) / sum( res_acres_2023),
-    units_3_4_acre_2023 = sum(units_3_4_2023 ) / sum( res_acres_2023),
-    units_5_9_acre_2023 = sum(units_5_9_2023 ) / sum( res_acres_2023),
-    units_10p_acre_2023 = sum(units_10p_2023 ) / sum( res_acres_2023) 
+    units_acre_2014 = sum(total_units_2014) / sum(res_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(res_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(res_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(res_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(res_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(res_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(res_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(res_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(res_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(res_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(res_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(res_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(res_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(res_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023)
     ) |> 
-  summarize(
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
+  mutate(
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_res_acres = res_acres_2023 - res_acres_2014,
+    pct_chg_res_acres = round(100*(chg_res_acres/sum(res_acres_2014)),1)
     )
 
-st_write(met.res.cmsbt08, dsn=task_gpkg, layer = 'pop_hh_unit_res_acre_cmsbt08')
+st_write(met.res.cmsbt08, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_cmsbt08', append = F)
 
-met.com.cmsbt08 <- met.com.muni |> 
+met.com.cmsbt08 <- met.muni |> 
   group_by(cmsbt08) |> 
   summarize(
+    com_acres_2014 = sum(com_acres_2014),
+    com_acres_2023 = sum(com_acres_2023),
     emp_acre_2014 = sum(emp2014) / sum(com_acres_2014),
     emp_sect_1_acre_2014 = sum(emp_2014_sect_1) / sum(com_acres_2014),
     emp_sect_2_acre_2014 = sum(emp_2014_sect_2) / sum(com_acres_2014),
@@ -2330,29 +2396,34 @@ met.com.cmsbt08 <- met.com.muni |>
     emp_sect_7_acre_2023 = sum(emp_2023_sect_7) / sum(com_acres_2023),
     emp_sect_8_acre_2023 = sum(emp_2023_sect_8) / sum(com_acres_2023),
     emp_sect_9_acre_2023 = sum(emp_2023_sect_9) / sum(com_acres_2023),
-    emp_sect_10_acre_2023 = sum(emp_2023_sect_10) / sum(com_acres_2023) 
-    ) |>
-  summarize(
+    emp_sect_10_acre_2023 = sum(emp_2023_sect_10) / sum(com_acres_2023),
+    chg_emp_sect_1_acre = sum(emp_2023_sect_1 - emp_2014_sect_1),
+    chg_emp_sect_2_acre = sum(emp_2023_sect_2 - emp_2014_sect_2),
+    chg_emp_sect_3_acre = sum(emp_2023_sect_3 - emp_2014_sect_3),
+    chg_emp_sect_4_acre = sum(emp_2023_sect_4 - emp_2014_sect_4),
+    chg_emp_sect_5_acre = sum(emp_2023_sect_5 - emp_2014_sect_5),
+    chg_emp_sect_6_acre = sum(emp_2023_sect_6 - emp_2014_sect_6),
+    chg_emp_sect_7_acre = sum(emp_2023_sect_7 - emp_2014_sect_7),
+    chg_emp_sect_8_acre = sum(emp_2023_sect_8 - emp_2014_sect_8),
+    chg_emp_sect_9_acre = sum(emp_2023_sect_9 - emp_2014_sect_9),
+    chg_emp_sect_10_acre = sum(emp_2023_sect_10 - emp_2014_sect_10)
+  ) |> 
+  mutate(
     chg_emp_acre = emp_acre_2023 - emp_acre_2014,
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_com_acres = com_acres_2023 - com_acres_2014,
+    pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1)
   )
 
-st_write(met.com.cmsbt08, dsn=task_gpkg, layer = 'emp_com_acre_cmsbt08')
+st_write(met.com.cmsbt08, dsn=task_gdb2, layer = 'emp_com_acre_cmsbt08', append=F)
 
 
 # Metrics by NLCD developed land acreage
 met.dev.cmsbt08 <- met.muni |> 
   group_by(cmsbt08) |> 
   summarize(
+    dev_acres_2014 = sum(dev_acres_2014),
+    dev_acres_2023 = sum(dev_acres_2023),
     pop_acre_2014 = sum(total_pop_2014) / sum(dev_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(dev_acres_2014),
     units_acre_2014 = sum(total_units_2014) / sum(dev_acres_2014),
@@ -2370,57 +2441,70 @@ met.dev.cmsbt08 <- met.muni |>
     units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_acres_2023),
     units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_acres_2023),
     emp_acre_2014 = sum(emp2014) / sum(dev_acres_2014),
-    emp_sect_1_acre_2014 = sum(emp_2014_sect_1) / sum(dev_acres_2014),
-    emp_sect_2_acre_2014 = sum(emp_2014_sect_2) / sum(dev_acres_2014),
-    emp_sect_3_acre_2014 = sum(emp_2014_sect_3) / sum(dev_acres_2014),
-    emp_sect_4_acre_2014 = sum(emp_2014_sect_4) / sum(dev_acres_2014),
-    emp_sect_5_acre_2014 = sum(emp_2014_sect_5) / sum(dev_acres_2014),
-    emp_sect_6_acre_2014 = sum(emp_2014_sect_6) / sum(dev_acres_2014),
-    emp_sect_7_acre_2014 = sum(emp_2014_sect_7) / sum(dev_acres_2014),
-    emp_sect_8_acre_2014 = sum(emp_2014_sect_8) / sum(dev_acres_2014),
-    emp_sect_9_acre_2014 = sum(emp_2014_sect_9) / sum(dev_acres_2014),
-    emp_sect_10_acre_2014 = sum(emp_2014_sect_10) / sum(dev_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_acres_2014),
     emp_acre_2023 = sum(emp2023) / sum(dev_acres_2023),
-    emp_sect_1_acre_2023 = sum(emp_2023_sect_1) / sum(dev_acres_2023),
-    emp_sect_2_acre_2023 = sum(emp_2023_sect_2) / sum(dev_acres_2023),
-    emp_sect_3_acre_2023 = sum(emp_2023_sect_3) / sum(dev_acres_2023),
-    emp_sect_4_acre_2023 = sum(emp_2023_sect_4) / sum(dev_acres_2023),
-    emp_sect_5_acre_2023 = sum(emp_2023_sect_5) / sum(dev_acres_2023),
-    emp_sect_6_acre_2023 = sum(emp_2023_sect_6) / sum(dev_acres_2023),
-    emp_sect_7_acre_2023 = sum(emp_2023_sect_7) / sum(dev_acres_2023),
-    emp_sect_8_acre_2023 = sum(emp_2023_sect_8) / sum(dev_acres_2023),
-    emp_sect_9_acre_2023 = sum(emp_2023_sect_9) / sum(dev_acres_2023),
-    emp_sect_10_acre_2023 = sum(emp_2023_sect_10) / sum(dev_acres_2023)
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023)
   ) |> 
-  summarize(
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
+  mutate(
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
+    chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
+    chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
+    chg_emp_sect_4_acre = emp_2023_sect_4_acre - emp_2014_sect_4_acre,
+    chg_emp_sect_5_acre = emp_2023_sect_5_acre - emp_2014_sect_5_acre,
+    chg_emp_sect_6_acre = emp_2023_sect_6_acre - emp_2014_sect_6_acre,
+    chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
+    chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
+    chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
     chg_emp_acre = emp_acre_2023 - emp_acre_2014,
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1)
   )
 
-st_write(met.dev.cmsbt08, dsn=task_gpkg, layer = 'pop_hh_units_emp_dev_acre_cmsbt08')
+st_write(met.dev.cmsbt08, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_cmsbt08', append =F)
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
 met.dev.res.cmsbt08 <- met.muni |> 
   group_by(cmsbt08) |> 
   summarize(
+    dev_res_acres_2014 = sum(dev_res_acres_2014),
+    dev_res_acres_2023 = sum(dev_res_acres_2023),
     pop_acre_2014 = sum(total_pop_2014) / sum(dev_res_acres_2014),
     hh_acre_2014 = sum(total_households_2014) / sum(dev_res_acres_2014),
     units_acre_2014 = sum(total_units_2014) / sum(dev_res_acres_2014),
@@ -2436,256 +2520,61 @@ met.dev.res.cmsbt08 <- met.muni |>
     units_2_acre_2023 = sum(units_2_2023) / sum(dev_res_acres_2023),
     units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_res_acres_2023),
     units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_res_acres_2023),
-    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023)
-  ) |> 
-  summarize(
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
-    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
-    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
-    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
-    )
-
-st_write(met.dev.res.cmsbt08, dsn=task_gpkg, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_cmsbt08')
-
-met.dev.com.cmsbt08 <- met.muni |> 
-  group_by(cmsbt08) |> 
-  summarize(
-    pop_acre_2014 = sum(total_pop_2014) / sum(dev_com_acres_2014),
-    hh_acre_2014 = sum(total_households_2014) / sum(dev_com_acres_2014),
-    units_acre_2014 = sum(total_units_2014) / sum(dev_com_acres_2014),
-    units_1_acre_2014 = sum(units_1_2014) / sum(dev_com_acres_2014),
-    units_2_acre_2014 = sum(units_2_2014) / sum(dev_com_acres_2014),
-    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(dev_com_acres_2014),
-    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(dev_com_acres_2014),
-    units_10p_acre_2014 = sum(units_10p_2014) / sum(dev_com_acres_2014),
-    pop_acre_2023 = sum(total_pop_2023) / sum(dev_com_acres_2023),
-    hh_acre_2023 = sum(total_households_2023) / sum(dev_com_acres_2023),
-    units_acre_2023 = sum(total_units_2023) / sum(dev_com_acres_2023),
-    units_1_acre_2023 = sum(units_1_2023) / sum(dev_com_acres_2023),
-    units_2_acre_2023 = sum(units_2_2023) / sum(dev_com_acres_2023),
-    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_com_acres_2023),
-    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_com_acres_2023),
-    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_com_acres_2023)
-  ) |> 
-  summarize(
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
-    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
-    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
-    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
-    )
-
-st_write(met.dev.com.cmsbt08, dsn=task_gpkg, layer = 'emp_nlcd_dev_in_com_acre_cmsbt08')
-
-```
-
-# 13 - MPO and statewide
-```{r}
-
-
-# Metrics by parcel acreage of res/com
-met.res.sw <- met.muni |>
-  summarize(
-    pop_acre_2014 = total_pop_2014 / res_acres_2014,
-    hh_acre_2014 = total_households_2014 / res_acres_2014,
-    units_acre_2014 = total_units_2014 / res_acres_2014,
-    units_1_acre_2014 = units_1_2014 / res_acres_2014,
-    units_2_acre_2014 = units_2_2014 / res_acres_2014,
-    units_3_4_acre_2014 = units_3_4_2014 / res_acres_2014,
-    units_5_9_acre_2014 = units_5_9_2014 / res_acres_2014,
-    units_10p_acre_2014 = units_10p_2014 / res_acres_2014,
-    pop_acre_2023 = total_pop_2023 / res_acres_2023,
-    hh_acre_2023 = total_households_2023 / res_acres_2023,
-    units_acre_2023 = total_units_2023 / res_acres_2023,
-    units_1_acre_2023 = units_1_2023 / res_acres_2023,
-    units_2_acre_2023 = units_2_2023 / res_acres_2023,
-    units_3_4_acre_2023 = units_3_4_2023 / res_acres_2023,
-    units_5_9_acre_2023 = units_5_9_2023 / res_acres_2023,
-    units_10p_acre_2023 = units_10p_2023 / res_acres_2023,
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
-    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
-    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
-    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
-    )
-
-st_write(met.res.muni, dsn=task_gpkg, layer = 'pop_hh_unit_res_acre_muni')
-
-met.com.muni <- met.muni |> 
-  group_by(muni_id, muni_name) |> 
-  summarize(
-    emp_acre_2014 = emp2014 / com_acres_2014,
-    emp_sect_1_acre_2014 = emp_2014_sect_1 / com_acres_2014,
-    emp_sect_2_acre_2014 = emp_2014_sect_2 / com_acres_2014,
-    emp_sect_3_acre_2014 = emp_2014_sect_3 / com_acres_2014,
-    emp_sect_4_acre_2014 = emp_2014_sect_4 / com_acres_2014,
-    emp_sect_5_acre_2014 = emp_2014_sect_5 / com_acres_2014,
-    emp_sect_6_acre_2014 = emp_2014_sect_6 / com_acres_2014,
-    emp_sect_7_acre_2014 = emp_2014_sect_7 / com_acres_2014,
-    emp_sect_8_acre_2014 = emp_2014_sect_8 / com_acres_2014,
-    emp_sect_9_acre_2014 = emp_2014_sect_9 / com_acres_2014,
-    emp_sect_10_acre_2014 = emp_2014_sect_10 / com_acres_2014,
-    emp_acre_2023 = emp2023 / com_acres_2023,
-    emp_sect_1_acre_2023 = emp_2023_sect_1 / com_acres_2023,
-    emp_sect_2_acre_2023 = emp_2023_sect_2 / com_acres_2023,
-    emp_sect_3_acre_2023 = emp_2023_sect_3 / com_acres_2023,
-    emp_sect_4_acre_2023 = emp_2023_sect_4 / com_acres_2023,
-    emp_sect_5_acre_2023 = emp_2023_sect_5 / com_acres_2023,
-    emp_sect_6_acre_2023 = emp_2023_sect_6 / com_acres_2023,
-    emp_sect_7_acre_2023 = emp_2023_sect_7 / com_acres_2023,
-    emp_sect_8_acre_2023 = emp_2023_sect_8 / com_acres_2023,
-    emp_sect_9_acre_2023 = emp_2023_sect_9 / com_acres_2023,
-    emp_sect_10_acre_2023 = emp_2023_sect_10 / com_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
-  )
-
-st_write(met.com.muni, dsn=task_gpkg, layer = 'emp_com_acre_muni')
-
-
-# Metrics by NLCD developed land acreage
-met.dev.muni <- met.muni |> 
-  group_by(muni_id, muni_name) |> 
-  summarize(
-    pop_acre_2014 = total_pop_2014 / dev_acres_2014,
-    hh_acre_2014 = total_households_2014 / dev_acres_2014,
-    units_acre_2014 = total_units_2014 / dev_acres_2014,
-    units_1_acre_2014 = units_1_2014 / dev_acres_2014,
-    units_2_acre_2014 = units_2_2014 / dev_acres_2014,
-    units_3_4_acre_2014 = units_3_4_2014 / dev_acres_2014,
-    units_5_9_acre_2014 = units_5_9_2014 / dev_acres_2014,
-    units_10p_acre_2014 = units_10p_2014 / dev_acres_2014,
-    pop_acre_2023 = total_pop_2023 / dev_acres_2023,
-    hh_acre_2023 = total_households_2023 / dev_acres_2023,
-    units_acre_2023 = total_units_2023 / dev_acres_2023,
-    units_1_acre_2023 = units_1_2023 / dev_acres_2023,
-    units_2_acre_2023 = units_2_2023 / dev_acres_2023,
-    units_3_4_acre_2023 = units_3_4_2023 / dev_acres_2023,
-    units_5_9_acre_2023 = units_5_9_2023 / dev_acres_2023,
-    units_10p_acre_2023 = units_10p_2023 / dev_acres_2023,
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023)
+    ) |> 
+  mutate(
     chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
     chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
     chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
-    emp_acre_2014 = emp2014 / dev_acres_2014,
-    emp_sect_1_acre_2014 = emp_2014_sect_1 / dev_acres_2014,
-    emp_sect_2_acre_2014 = emp_2014_sect_2 / dev_acres_2014,
-    emp_sect_3_acre_2014 = emp_2014_sect_3 / dev_acres_2014,
-    emp_sect_4_acre_2014 = emp_2014_sect_4 / dev_acres_2014,
-    emp_sect_5_acre_2014 = emp_2014_sect_5 / dev_acres_2014,
-    emp_sect_6_acre_2014 = emp_2014_sect_6 / dev_acres_2014,
-    emp_sect_7_acre_2014 = emp_2014_sect_7 / dev_acres_2014,
-    emp_sect_8_acre_2014 = emp_2014_sect_8 / dev_acres_2014,
-    emp_sect_9_acre_2014 = emp_2014_sect_9 / dev_acres_2014,
-    emp_sect_10_acre_2014 = emp_2014_sect_10 / dev_acres_2014,
-    emp_acre_2023 = emp2023 / dev_acres_2023,
-    emp_sect_1_acre_2023 = emp_2023_sect_1 / dev_acres_2023,
-    emp_sect_2_acre_2023 = emp_2023_sect_2 / dev_acres_2023,
-    emp_sect_3_acre_2023 = emp_2023_sect_3 / dev_acres_2023,
-    emp_sect_4_acre_2023 = emp_2023_sect_4 / dev_acres_2023,
-    emp_sect_5_acre_2023 = emp_2023_sect_5 / dev_acres_2023,
-    emp_sect_6_acre_2023 = emp_2023_sect_6 / dev_acres_2023,
-    emp_sect_7_acre_2023 = emp_2023_sect_7 / dev_acres_2023,
-    emp_sect_8_acre_2023 = emp_2023_sect_8 / dev_acres_2023,
-    emp_sect_9_acre_2023 = emp_2023_sect_9 / dev_acres_2023,
-    emp_sect_10_acre_2023 = emp_2023_sect_10 / dev_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
-  )
-
-st_write(met.dev.muni, dsn=task_gpkg, layer = 'pop_hh_units_emp_dev_acre_muni')
-
-# Metrics by NLCD developed land IN parcel res/com acreage
-
-met.dev.res.muni <- met.muni |> 
-  group_by(muni_id, muni_name) |> 
-  summarize(
-    pop_acre_2014 = total_pop_2014 / res_acres_2014,
-    hh_acre_2014 = total_households_2014 / res_acres_2014,
-    units_acre_2014 = total_units_2014 / res_acres_2014,
-    units_1_acre_2014 = units_1_2014 / res_acres_2014,
-    units_2_acre_2014 = units_2_2014 / res_acres_2014,
-    units_3_4_acre_2014 = units_3_4_2014 / res_acres_2014,
-    units_5_9_acre_2014 = units_5_9_2014 / res_acres_2014,
-    units_10p_acre_2014 = units_10p_2014 / res_acres_2014,
-    pop_acre_2023 = total_pop_2023 / res_acres_2023,
-    hh_acre_2023 = total_households_2023 / res_acres_2023,
-    units_acre_2023 = total_units_2023 / res_acres_2023,
-    units_1_acre_2023 = units_1_2023 / res_acres_2023,
-    units_2_acre_2023 = units_2_2023 / res_acres_2023,
-    units_3_4_acre_2023 = units_3_4_2023 / res_acres_2023,
-    units_5_9_acre_2023 = units_5_9_2023 / res_acres_2023,
-    units_10p_acre_2023 = units_10p_2023 / res_acres_2023,
     chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
     chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
     chg_units_acre = units_acre_2023 - units_acre_2014,
-    chg_units_1_acre = units_1_acre_2023 - units_1_acre_2014,
-    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
-    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
-    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
-    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
+    pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1)
     )
 
-st_write(met.dev.res.muni, dsn=task_gpkg, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_muni')
+st_write(met.dev.res.cmsbt08, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_cmsbt08', append=F)
 
-met.dev.com.muni <- met.muni |> 
-  group_by(muni_id, muni_name) |> 
+
+met.dev.com.cmsbt08 <- met.muni |> 
+  group_by(cmsbt08) |>  
   summarize(
-    emp_acre_2014 = emp2014 / dev_com_acres_2014,
-    emp_sect_1_acre_2014 = emp_2014_sect_1 / dev_com_acres_2014,
-    emp_sect_2_acre_2014 = emp_2014_sect_2 / dev_com_acres_2014,
-    emp_sect_3_acre_2014 = emp_2014_sect_3 / dev_com_acres_2014,
-    emp_sect_4_acre_2014 = emp_2014_sect_4 / dev_com_acres_2014,
-    emp_sect_5_acre_2014 = emp_2014_sect_5 / dev_com_acres_2014,
-    emp_sect_6_acre_2014 = emp_2014_sect_6 / dev_com_acres_2014,
-    emp_sect_7_acre_2014 = emp_2014_sect_7 / dev_com_acres_2014,
-    emp_sect_8_acre_2014 = emp_2014_sect_8 / dev_com_acres_2014,
-    emp_sect_9_acre_2014 = emp_2014_sect_9 / dev_com_acres_2014,
-    emp_sect_10_acre_2014 = emp_2014_sect_10 / dev_com_acres_2014,
-    emp_acre_2023 = emp2023 / dev_com_acres_2023,
-    emp_sect_1_acre_2023 = emp_2023_sect_1 / dev_com_acres_2023,
-    emp_sect_2_acre_2023 = emp_2023_sect_2 / dev_com_acres_2023,
-    emp_sect_3_acre_2023 = emp_2023_sect_3 / dev_com_acres_2023,
-    emp_sect_4_acre_2023 = emp_2023_sect_4 / dev_com_acres_2023,
-    emp_sect_5_acre_2023 = emp_2023_sect_5 / dev_com_acres_2023,
-    emp_sect_6_acre_2023 = emp_2023_sect_6 / dev_com_acres_2023,
-    emp_sect_7_acre_2023 = emp_2023_sect_7 / dev_com_acres_2023,
-    emp_sect_8_acre_2023 = emp_2023_sect_8 / dev_com_acres_2023,
-    emp_sect_9_acre_2023 = emp_2023_sect_9 / dev_com_acres_2023,
-    emp_sect_10_acre_2023 = emp_2023_sect_10 / dev_com_acres_2023,
-    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    dev_com_acres_2014 = sum(dev_com_acres_2014),
+    dev_com_acres_2023 = sum(dev_com_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(dev_com_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_com_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_com_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_com_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_com_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_com_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_com_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_com_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_com_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_com_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_com_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(dev_com_acres_2023),
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_com_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_com_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_com_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_com_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_com_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_com_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_com_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_com_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_com_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023)
+  )|> 
+  mutate(
     chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
     chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
     chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
@@ -2695,15 +2584,551 @@ met.dev.com.muni <- met.muni |>
     chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
     chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
     chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
+    pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1)
   )
 
-st_write(met.dev.com.muni, dsn=task_gpkg, layer = 'emp_nlcd_dev_in_com_acre_muni')
+st_write(met.dev.com.cmsbt08, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_cmsbt08', append = F)
 
 ```
 
+# 13 - MPO and statewide
+
+```{r}
+
+# Metrics by parcel acreage of res/com
+met.res.sw <- met.muni |> 
+  summarize(
+    res_acres_2014 = sum(res_acres_2014),
+    res_acres_2023 = sum(res_acres_2023),
+    pop_acre_2014 = sum(total_pop_2014) / sum(res_acres_2014),
+    hh_acre_2014 = sum(total_households_2014) / sum(res_acres_2014),
+    units_acre_2014 = sum(total_units_2014) / sum(res_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(res_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(res_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(res_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(res_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(res_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(res_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(res_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(res_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(res_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(res_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(res_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(res_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(res_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023)
+    ) |> 
+  mutate(
+    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
+    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
+    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_res_acres = res_acres_2023 - res_acres_2014,
+    pct_chg_res_acres = round(100*(chg_res_acres/sum(res_acres_2014)),1)
+    ) |> 
+  mutate(mpo='STATEWIDE')
+
+met.res.mpo <- met.muni |> 
+  group_by(mpo) |> 
+  summarize(
+    res_acres_2014 = sum(res_acres_2014),
+    res_acres_2023 = sum(res_acres_2023),
+    pop_acre_2014 = sum(total_pop_2014) / sum(res_acres_2014),
+    hh_acre_2014 = sum(total_households_2014) / sum(res_acres_2014),
+    units_acre_2014 = sum(total_units_2014) / sum(res_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(res_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(res_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(res_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(res_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(res_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(res_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(res_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(res_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(res_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(res_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(res_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(res_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(res_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(res_acres_2023)
+    ) |> 
+  mutate(
+    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
+    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
+    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_res_acres = res_acres_2023 - res_acres_2014,
+    pct_chg_res_acres = round(100*(chg_res_acres/sum(res_acres_2014)),1)
+    ) |> 
+  rbind(met.res.sw)
+
+st_write(met.res.mpo, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_mpo', append = F)
+
+met.com.sw <- met.muni |> 
+  summarize(
+    com_acres_2014 = sum(com_acres_2014),
+    com_acres_2023 = sum(com_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(com_acres_2014),
+    emp_sect_1_acre_2014 = sum(emp_2014_sect_1) / sum(com_acres_2014),
+    emp_sect_2_acre_2014 = sum(emp_2014_sect_2) / sum(com_acres_2014),
+    emp_sect_3_acre_2014 = sum(emp_2014_sect_3) / sum(com_acres_2014),
+    emp_sect_4_acre_2014 = sum(emp_2014_sect_4) / sum(com_acres_2014),
+    emp_sect_5_acre_2014 = sum(emp_2014_sect_5) / sum(com_acres_2014),
+    emp_sect_6_acre_2014 = sum(emp_2014_sect_6) / sum(com_acres_2014),
+    emp_sect_7_acre_2014 = sum(emp_2014_sect_7) / sum(com_acres_2014),
+    emp_sect_8_acre_2014 = sum(emp_2014_sect_8) / sum(com_acres_2014),
+    emp_sect_9_acre_2014 = sum(emp_2014_sect_9) / sum(com_acres_2014),
+    emp_sect_10_acre_2014 = sum(emp_2014_sect_10) / sum(com_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(com_acres_2023),
+    emp_sect_1_acre_2023 = sum(emp_2023_sect_1) / sum(com_acres_2023),
+    emp_sect_2_acre_2023 = sum(emp_2023_sect_2) / sum(com_acres_2023),
+    emp_sect_3_acre_2023 = sum(emp_2023_sect_3) / sum(com_acres_2023),
+    emp_sect_4_acre_2023 = sum(emp_2023_sect_4) / sum(com_acres_2023),
+    emp_sect_5_acre_2023 = sum(emp_2023_sect_5) / sum(com_acres_2023),
+    emp_sect_6_acre_2023 = sum(emp_2023_sect_6) / sum(com_acres_2023),
+    emp_sect_7_acre_2023 = sum(emp_2023_sect_7) / sum(com_acres_2023),
+    emp_sect_8_acre_2023 = sum(emp_2023_sect_8) / sum(com_acres_2023),
+    emp_sect_9_acre_2023 = sum(emp_2023_sect_9) / sum(com_acres_2023),
+    emp_sect_10_acre_2023 = sum(emp_2023_sect_10) / sum(com_acres_2023),
+    chg_emp_sect_1_acre = sum(emp_2023_sect_1 - emp_2014_sect_1),
+    chg_emp_sect_2_acre = sum(emp_2023_sect_2 - emp_2014_sect_2),
+    chg_emp_sect_3_acre = sum(emp_2023_sect_3 - emp_2014_sect_3),
+    chg_emp_sect_4_acre = sum(emp_2023_sect_4 - emp_2014_sect_4),
+    chg_emp_sect_5_acre = sum(emp_2023_sect_5 - emp_2014_sect_5),
+    chg_emp_sect_6_acre = sum(emp_2023_sect_6 - emp_2014_sect_6),
+    chg_emp_sect_7_acre = sum(emp_2023_sect_7 - emp_2014_sect_7),
+    chg_emp_sect_8_acre = sum(emp_2023_sect_8 - emp_2014_sect_8),
+    chg_emp_sect_9_acre = sum(emp_2023_sect_9 - emp_2014_sect_9),
+    chg_emp_sect_10_acre = sum(emp_2023_sect_10 - emp_2014_sect_10)
+  ) |> 
+  mutate(
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_com_acres = com_acres_2023 - com_acres_2014,
+    pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1)
+  ) |> 
+  mutate(mpo='STATEWIDE')
+
+met.com.mpo <- met.muni |> 
+  group_by(mpo) |> 
+  summarize(
+    com_acres_2014 = sum(com_acres_2014),
+    com_acres_2023 = sum(com_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(com_acres_2014),
+    emp_sect_1_acre_2014 = sum(emp_2014_sect_1) / sum(com_acres_2014),
+    emp_sect_2_acre_2014 = sum(emp_2014_sect_2) / sum(com_acres_2014),
+    emp_sect_3_acre_2014 = sum(emp_2014_sect_3) / sum(com_acres_2014),
+    emp_sect_4_acre_2014 = sum(emp_2014_sect_4) / sum(com_acres_2014),
+    emp_sect_5_acre_2014 = sum(emp_2014_sect_5) / sum(com_acres_2014),
+    emp_sect_6_acre_2014 = sum(emp_2014_sect_6) / sum(com_acres_2014),
+    emp_sect_7_acre_2014 = sum(emp_2014_sect_7) / sum(com_acres_2014),
+    emp_sect_8_acre_2014 = sum(emp_2014_sect_8) / sum(com_acres_2014),
+    emp_sect_9_acre_2014 = sum(emp_2014_sect_9) / sum(com_acres_2014),
+    emp_sect_10_acre_2014 = sum(emp_2014_sect_10) / sum(com_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(com_acres_2023),
+    emp_sect_1_acre_2023 = sum(emp_2023_sect_1) / sum(com_acres_2023),
+    emp_sect_2_acre_2023 = sum(emp_2023_sect_2) / sum(com_acres_2023),
+    emp_sect_3_acre_2023 = sum(emp_2023_sect_3) / sum(com_acres_2023),
+    emp_sect_4_acre_2023 = sum(emp_2023_sect_4) / sum(com_acres_2023),
+    emp_sect_5_acre_2023 = sum(emp_2023_sect_5) / sum(com_acres_2023),
+    emp_sect_6_acre_2023 = sum(emp_2023_sect_6) / sum(com_acres_2023),
+    emp_sect_7_acre_2023 = sum(emp_2023_sect_7) / sum(com_acres_2023),
+    emp_sect_8_acre_2023 = sum(emp_2023_sect_8) / sum(com_acres_2023),
+    emp_sect_9_acre_2023 = sum(emp_2023_sect_9) / sum(com_acres_2023),
+    emp_sect_10_acre_2023 = sum(emp_2023_sect_10) / sum(com_acres_2023),
+    chg_emp_sect_1_acre = sum(emp_2023_sect_1 - emp_2014_sect_1),
+    chg_emp_sect_2_acre = sum(emp_2023_sect_2 - emp_2014_sect_2),
+    chg_emp_sect_3_acre = sum(emp_2023_sect_3 - emp_2014_sect_3),
+    chg_emp_sect_4_acre = sum(emp_2023_sect_4 - emp_2014_sect_4),
+    chg_emp_sect_5_acre = sum(emp_2023_sect_5 - emp_2014_sect_5),
+    chg_emp_sect_6_acre = sum(emp_2023_sect_6 - emp_2014_sect_6),
+    chg_emp_sect_7_acre = sum(emp_2023_sect_7 - emp_2014_sect_7),
+    chg_emp_sect_8_acre = sum(emp_2023_sect_8 - emp_2014_sect_8),
+    chg_emp_sect_9_acre = sum(emp_2023_sect_9 - emp_2014_sect_9),
+    chg_emp_sect_10_acre = sum(emp_2023_sect_10 - emp_2014_sect_10)
+  ) |> 
+  mutate(
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_com_acres = com_acres_2023 - com_acres_2014,
+    pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1)
+  ) |> 
+  rbind(met.com.sw)
+
+st_write(met.com.mpo, dsn=task_gdb2, layer = 'emp_com_acre_mpo', append=F)
+
+
+# Metrics by NLCD developed land acreage
+met.dev.sw <- met.muni |>
+  summarize(
+    dev_acres_2014 = sum(dev_acres_2014),
+    dev_acres_2023 = sum(dev_acres_2023),
+    pop_acre_2014 = sum(total_pop_2014) / sum(dev_acres_2014),
+    hh_acre_2014 = sum(total_households_2014) / sum(dev_acres_2014),
+    units_acre_2014 = sum(total_units_2014) / sum(dev_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(dev_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(dev_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(dev_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(dev_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(dev_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(dev_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(dev_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(dev_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(dev_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(dev_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(dev_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(dev_acres_2023),
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023)
+  ) |> 
+  mutate(
+    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
+    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
+    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
+    chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
+    chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
+    chg_emp_sect_4_acre = emp_2023_sect_4_acre - emp_2014_sect_4_acre,
+    chg_emp_sect_5_acre = emp_2023_sect_5_acre - emp_2014_sect_5_acre,
+    chg_emp_sect_6_acre = emp_2023_sect_6_acre - emp_2014_sect_6_acre,
+    chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
+    chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
+    chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1)
+  ) |> 
+  mutate(mpo='STATEWIDE')
+
+met.dev.mpo <- met.muni |> 
+  group_by(mpo) |> 
+  summarize(
+    dev_acres_2014 = sum(dev_acres_2014),
+    dev_acres_2023 = sum(dev_acres_2023),
+    pop_acre_2014 = sum(total_pop_2014) / sum(dev_acres_2014),
+    hh_acre_2014 = sum(total_households_2014) / sum(dev_acres_2014),
+    units_acre_2014 = sum(total_units_2014) / sum(dev_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(dev_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(dev_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(dev_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(dev_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(dev_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(dev_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(dev_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(dev_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(dev_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(dev_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(dev_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(dev_acres_2023),
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_acres_2023)
+  ) |> 
+  mutate(
+    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
+    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
+    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
+    chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
+    chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
+    chg_emp_sect_4_acre = emp_2023_sect_4_acre - emp_2014_sect_4_acre,
+    chg_emp_sect_5_acre = emp_2023_sect_5_acre - emp_2014_sect_5_acre,
+    chg_emp_sect_6_acre = emp_2023_sect_6_acre - emp_2014_sect_6_acre,
+    chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
+    chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
+    chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1)
+  ) |> 
+  rbind(met.dev.sw)
+
+st_write(met.dev.mpo, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_mpo', append =F)
+
+# Metrics by NLCD developed land IN parcel res/com acreage
+
+met.dev.res.sw <- met.muni |> 
+  summarize(
+    dev_res_acres_2014 = sum(dev_res_acres_2014),
+    dev_res_acres_2023 = sum(dev_res_acres_2023),
+    pop_acre_2014 = sum(total_pop_2014) / sum(dev_res_acres_2014),
+    hh_acre_2014 = sum(total_households_2014) / sum(dev_res_acres_2014),
+    units_acre_2014 = sum(total_units_2014) / sum(dev_res_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(dev_res_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(dev_res_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(dev_res_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(dev_res_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(dev_res_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(dev_res_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(dev_res_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(dev_res_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(dev_res_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(dev_res_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_res_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_res_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023)
+    ) |> 
+  mutate(
+    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
+    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
+    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
+    pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1)
+    ) |> 
+  mutate(mpo='STATEWIDE')
+
+met.dev.res.mpo <- met.muni |> 
+  group_by(mpo) |> 
+  summarize(
+    dev_res_acres_2014 = sum(dev_res_acres_2014),
+    dev_res_acres_2023 = sum(dev_res_acres_2023),
+    pop_acre_2014 = sum(total_pop_2014) / sum(dev_res_acres_2014),
+    hh_acre_2014 = sum(total_households_2014) / sum(dev_res_acres_2014),
+    units_acre_2014 = sum(total_units_2014) / sum(dev_res_acres_2014),
+    units_1_acre_2014 = sum(units_1_2014) / sum(dev_res_acres_2014),
+    units_2_acre_2014 = sum(units_2_2014) / sum(dev_res_acres_2014),
+    units_3_4_acre_2014 = sum(units_3_4_2014) / sum(dev_res_acres_2014),
+    units_5_9_acre_2014 = sum(units_5_9_2014) / sum(dev_res_acres_2014),
+    units_10p_acre_2014 = sum(units_10p_2014) / sum(dev_res_acres_2014),
+    pop_acre_2023 = sum(total_pop_2023) / sum(dev_res_acres_2023),
+    hh_acre_2023 = sum(total_households_2023) / sum(dev_res_acres_2023),
+    units_acre_2023 = sum(total_units_2023) / sum(dev_res_acres_2023),
+    units_1_acre_2023 = sum(units_1_2023) / sum(dev_res_acres_2023),
+    units_2_acre_2023 = sum(units_2_2023) / sum(dev_res_acres_2023),
+    units_3_4_acre_2023 = sum(units_3_4_2023) / sum(dev_res_acres_2023),
+    units_5_9_acre_2023 = sum(units_5_9_2023) / sum(dev_res_acres_2023),
+    units_10p_acre_2023 = sum(units_10p_2023) / sum(dev_res_acres_2023),
+    units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
+    units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023)
+    ) |> 
+  mutate(
+    chg_units_2_acre_2023 = units_2_acre_2023 - units_2_acre_2014,
+    chg_units_3_4_acre = units_3_4_acre_2023 - units_3_4_acre_2014,
+    chg_units_5_9_acre = units_5_9_acre_2023 - units_5_9_acre_2014,
+    chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
+    chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
+    pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
+    chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
+    pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014,
+    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
+    pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1)
+    ) |> 
+  rbind(met.dev.res.sw)
+
+st_write(met.dev.res.mpo, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_mpo', append=F)
+
+met.dev.com.sw <- met.muni |>
+  summarize(
+    dev_com_acres_2014 = sum(dev_com_acres_2014),
+    dev_com_acres_2023 = sum(dev_com_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(dev_com_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_com_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_com_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_com_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_com_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_com_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_com_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_com_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_com_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_com_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_com_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(dev_com_acres_2023),
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_com_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_com_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_com_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_com_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_com_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_com_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_com_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_com_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_com_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023)
+  )|> 
+  mutate(
+    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
+    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
+    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
+    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
+    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
+    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
+    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
+    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
+    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
+    pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1)
+  ) |> 
+  mutate(mpo='STATEWIDE')
+
+met.dev.com.mpo <- met.muni |> 
+  group_by(mpo) |>  
+  summarize(
+    dev_com_acres_2014 = sum(dev_com_acres_2014),
+    dev_com_acres_2023 = sum(dev_com_acres_2023),
+    emp_acre_2014 = sum(emp2014) / sum(dev_com_acres_2014),
+    emp_2014_sect_1_acre = sum(emp_2014_sect_1) / sum(dev_com_acres_2014),
+    emp_2014_sect_2_acre = sum(emp_2014_sect_2) / sum(dev_com_acres_2014),
+    emp_2014_sect_3_acre = sum(emp_2014_sect_3) / sum(dev_com_acres_2014),
+    emp_2014_sect_4_acre = sum(emp_2014_sect_4) / sum(dev_com_acres_2014),
+    emp_2014_sect_5_acre = sum(emp_2014_sect_5) / sum(dev_com_acres_2014),
+    emp_2014_sect_6_acre = sum(emp_2014_sect_6) / sum(dev_com_acres_2014),
+    emp_2014_sect_7_acre = sum(emp_2014_sect_7) / sum(dev_com_acres_2014),
+    emp_2014_sect_8_acre = sum(emp_2014_sect_8) / sum(dev_com_acres_2014),
+    emp_2014_sect_9_acre = sum(emp_2014_sect_9) / sum(dev_com_acres_2014),
+    emp_2014_sect_10_acre = sum(emp_2014_sect_10) / sum(dev_com_acres_2014),
+    emp_acre_2023 = sum(emp2023) / sum(dev_com_acres_2023),
+    emp_2023_sect_1_acre = sum(emp_2023_sect_1) / sum(dev_com_acres_2023),
+    emp_2023_sect_2_acre = sum(emp_2023_sect_2) / sum(dev_com_acres_2023),
+    emp_2023_sect_3_acre = sum(emp_2023_sect_3) / sum(dev_com_acres_2023),
+    emp_2023_sect_4_acre = sum(emp_2023_sect_4) / sum(dev_com_acres_2023),
+    emp_2023_sect_5_acre = sum(emp_2023_sect_5) / sum(dev_com_acres_2023),
+    emp_2023_sect_6_acre = sum(emp_2023_sect_6) / sum(dev_com_acres_2023),
+    emp_2023_sect_7_acre = sum(emp_2023_sect_7) / sum(dev_com_acres_2023),
+    emp_2023_sect_8_acre = sum(emp_2023_sect_8) / sum(dev_com_acres_2023),
+    emp_2023_sect_9_acre = sum(emp_2023_sect_9) / sum(dev_com_acres_2023),
+    emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023)
+  )|> 
+  mutate(
+    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
+    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
+    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
+    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
+    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
+    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
+    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
+    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
+    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
+    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_acre = emp_acre_2023 - emp_acre_2014,
+    pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
+    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
+    pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1)
+  ) |> 
+  rbind(met.dev.com.sw)
+
+st_write(met.dev.com.mpo, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_mpo', append = F)
+
+```
 
 # 12 - Parcel LUC Changes
+
 ```{r}
 
 p14 <- m14 |> 

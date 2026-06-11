@@ -28,28 +28,30 @@ library(mapcdatakeys)
 
 # Paths
 if (grepl('VM',Sys.info()[['nodename']])){
-  base <- '//data-sync/Public/DataServices'
+  # base <- '//data-sync/Public/DataServices'
+  base <- 'K:/DataServices'
 } else {
   base <- 'S:/Network Shares/K Drive/DataServices'
 }
 
 data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data/Task_4')
 
-
+scen2 <- 'Scenario_2'
 scen3 <- 'Scenario_3'
 scen4 <- 'Scenario_4'
 
-scen <- scen4
+scen <- scen2
 
-# skim_path <- file.path(data_path,scen,'Inputs/Skims')
-# skim3_path <- file.path(data_path,scen3,'Inputs/Skims')
-# skim4_path <- file.path(data_path,scen4,'Inputs/Skims')
+skim_path <- file.path(data_path,scen,'Inputs/Skims')
+skim2_path <- file.path(data_path,scen2,'Inputs/Skims')
+skim3_path <- file.path(data_path,scen3,'Inputs/Skims')
+skim4_path <- file.path(data_path,scen4,'Inputs/Skims')
 
 
-skim3_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_3'
-skim4_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_4'
-
-skim_path <- file.path('C:/Users/cgate/Desktop/Skims',scen)
+# skim3_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_3'
+# skim4_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_4'
+# 
+# skim_path <- file.path('C:/Users/cgate/Desktop/Skims',scen)
 
 # dir.create(skim_path, showWarnings = F)
 
@@ -392,5 +394,45 @@ for (yr in c(base_prefix, int_prefix, plan_prefix)) {
            paste0('swm_skims_', yr, '.csv')))
     
 }
+
+```
+
+# 7 -  Compare skims
+```{r}
+
+yr=int_prefix
+
+m2 <- fread(file.path(skim2_path,yr,
+           paste0('mapcm_skims_', yr, '.csv')))
+names(m2)[3:5] <-  paste0(names(m2)[3:5],'_scen2')
+
+m3 <- fread(file.path(skim3_path,yr,
+           paste0('mapcm_skims_', yr, '.csv')))
+names(m3)[3:5] <-  paste0(names(m3)[3:5],'_scen3')
+
+m4 <- fread(file.path(skim4_path,yr,
+           paste0('mapcm_skims_', yr, '.csv')))
+names(m4)[3:5] <-  paste0(names(m4)[3:5],'_scen4')
+
+comp <- left_join(m2, m4, by=c('from_zone_id','to_zone_id')) |> 
+  # left_join(m4, by=c('from_zone_id','to_zone_id')) |> 
+  mutate(
+    # sov_diff_23 = sov_am_totcost_scen3 - sov_am_totcost_scen2,
+         sov_diff_32 = sov_am_totcost_scen4 - sov_am_totcost_scen2,
+         # wat_diff_23 = wat_am_totcost_scen3 - wat_am_totcost_scen2,
+         wat_diff_32 = wat_am_totcost_scen4 - wat_am_totcost_scen2,
+         # dat_diff_23 = dat_am_totcost_scen3 - dat_am_totcost_scen2,
+         dat_diff_32 = dat_am_totcost_scen4 - dat_am_totcost_scen2)
+
+sov.diff <- comp |> 
+  filter(sov_diff_32!=0)
+wat.diff <- comp |> 
+  filter(wat_diff_32!=0)
+dat.diff <- comp |> 
+  filter(dat_diff_32!=0)
+
+
+comp[sov_diff_32==0]
+
 
 ```
