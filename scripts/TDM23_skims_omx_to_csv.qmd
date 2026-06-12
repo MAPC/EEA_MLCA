@@ -2,7 +2,7 @@
 title: "TDM23_skims_omx_to_csv"
 author: "Conor Gately"
 format: html
-editor: visual
+editor: source
 ---
 
 ## Process CTPS model skims from TDM23 for UrbanSim input format
