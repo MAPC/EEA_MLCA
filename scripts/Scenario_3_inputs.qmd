@@ -20,12 +20,14 @@ pacman::p_load(
   reticulate
 )
 
+options(scipen = 999)
+set.seed(351)
 
 # devtools::install_github('MAPC/mapcdatakeys')
 library(mapcdatakeys)
 
 
-reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+# reticulate::use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
 
 # Paths
 if (grepl('VM',Sys.info()[['nodename']])){
@@ -38,12 +40,12 @@ if (grepl('VM',Sys.info()[['nodename']])){
 data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
 
 scen3_path = paste0(data_path,'/Task_4/Scenario_3/')
-sp3_path <- paste0(scen_path,'Inputs/Spatial/')
-scen3_gdb = paste0(sp_path, 'Scenario_3.gdb')
+sp3_path <- paste0(scen3_path,'Inputs/Spatial/')
+scen3_gdb = paste0(sp3_path, 'Scenario_3.gdb')
 
 scen4_path = paste0(data_path,'/Task_4/Scenario_4/')
-sp4_path <- paste0(scen_path,'Inputs/Spatial/')
-scen4_gdb = paste0(sp_path, 'Scenario_4.gdb')
+sp4_path <- paste0(scen4_path,'Inputs/Spatial/')
+scen4_gdb = paste0(sp4_path, 'Scenario_4.gdb')
 
 knitr::opts_knit$set(root.dir = data_path)
 ```
@@ -113,6 +115,12 @@ tod.sf <- st_to_sf(tod.tab)
 # 3 - Development Pipeline Adjustments
 
 ```{r}
+blk2010 <- mapcdatakeys::block_sf(2010)
+
+mapc.blks <- left_join(blk2010,mapcdatakeys::all_muni_data_keys |> select(muni_id,rpa_acr), by='muni_id') |> pull(bl10_id) |> unique()
+
+# sewer <- st_read(dsn = scen4_gdb, layer = 'parcel_sewer_service_area_constraint_erase')
+sewer <- st_read(dsn = 'C:/Users/cgate/Desktop/EEA_scratch/Scenario_4.gdb', layer = 'parcel_sewer_service_area_constraint_erase')
 
 ruc <- mapcdatakeys::all_muni_data_keys |> 
   select(muni_id,cmtyp08) |> 
@@ -120,13 +128,25 @@ ruc <- mapcdatakeys::all_muni_data_keys |>
   filter(cmtyp08 == 'Regional Urban Center')
 
 ruc.blk <- mapcdatakeys::block_sf(2010) |> 
-  filter(muni_id %in% ruc$muni_id)
+  filter(muni_id %in% ruc$muni_id) |> 
+  st_intersection(sewer)
 
-st_write(ruc.blk, dsn = scen_gdb, layer = 'blocks2010_regional_urban_centers')
+tod.sf <- st_read(dsn = scen4_gdb, layer = 'TOD_100dua_zones')
 
+tod.blk <- blk2010 |> 
+  st_intersection(tod.sf)
 
+non.cr.ruc <- ruc |> filter(!muni_id %in% tod.blk$muni_id)
+non.cr.ruc.blk <- ruc.blk |> filter(!muni_id %in% tod.blk$muni_id)
 
+res.blks <- blk2010 |> 
+  filter(bl10_id %in% non.cr.ruc.blk$bl10_id | bl10_id %in% tod.blk$bl10_id) |> 
+  pull(bl10_id) |> 
+  unique()
 
+# com.zones <- st_read(dsn = scen3_gdb, layer='nonzero_FAR_zones_eea_scen_2')
+# com.blks <- res.blks |> 
+#   st_intersection(com.zones)
 
 mb.raw <- st_read(
   dsn = file.path(data_path, 'Spatial/all_massbuilds.gpkg'),
@@ -134,7 +154,7 @@ mb.raw <- st_read(
   ) |>
   setDT()
 
-mb30 <- mb.raw |>
+mb25to50 <- mb.raw |>
   st_drop_geometry() |>
   filter(start_year>2024) |>
   select(identification, start_year, residential_units, employment_capacity) |>
@@ -149,16 +169,105 @@ mb30 <- mb.raw |>
   summarize(
     mb_emp_cap_added = sum(employment_capacity, na.rm = T),
     mb_res_units_added = sum(residential_units, na.rm = T),
+    avg_emp_cap = median(employment_capacity, na.rm = T),
+    avg_res_units_added = median(residential_units, na.rm = T),
     res_proj = sum(res_proj),
     comm_proj = sum(comm_proj)
   )
+
+res.target <- round(sum(mb25to50$mb_res_units_added)*.15/100)
+# 176 developments at 100 units each
+
+com.target <- round(sum(mb25to50$mb_emp_cap_added)*.15/120)
+# 406 developments at 120 'employment capacity' each
+
+samp.years <- seq(2025,2035)
+
+res.sample.blks <- sample(res.blks, res.target, replace = FALSE)
+com.sample.blks <- sample(res.blks, com.target, replace = FALSE)
+
+res.sim <- data.table(
+    block_id = res.sample.blks,
+    project_id = seq(max(mb.raw$project_id) + 1, max(mb.raw$project_id) + res.target),
+    name = paste0('residential_simulated_development_',1:res.target),
+    building_type_id = rep(1, res.target),
+    start_year = sample(samp.years, res.target, replace = TRUE),
+    duration = rep(1, res.target),
+    status = rep('Committed', res.target),
+    redevelopment = rep(0, res.target),
+    tags = rep('EEA_simulated_developments', res.target),
+    phased = rep('FALSE', res.target),
+    buildings_count = rep(1, res.target),
+    floors = rep(3, res.target),
+    descriptive_location = rep('', res.target),
+    street = rep('', res.target),
+    city = rep('', res.target),
+    state = rep('MA', res.target),
+    zip = rep('', res.target),
+    identification = NA,
+    developer = NA,
+    source = 'mapc',
+    notes = rep('', res.target),
+    residential_units = rep(100, res.target),
+    average_unit_size = rep(1000, res.target),
+    market_rate_units = rep(100, res.target),
+    affordable_units = rep(0, res.target),
+    own_units = rep(100, res.target),
+    rent_units = rep(0, res.target)
+    )
+
+com.sim <- data.table(
+    block_id = com.sample.blks,
+    project_id = seq(max(res.sim$project_id) + 1, max(res.sim$project_id) + com.target),
+    name = paste0('nonresidential_simulated_development_',1:com.target),
+    building_type_id = rep(5, com.target),
+    start_year = sample(samp.years, com.target, replace = TRUE),
+    duration = rep(1, com.target),
+    status = rep('Committed', com.target),
+    redevelopment = rep(0, com.target),
+    tags = rep('EEA_simulated_developments', com.target),
+    phased = rep('FALSE', com.target),
+    buildings_count = rep(1, com.target),
+    floors = rep(2, com.target),
+    descriptive_location = rep('', com.target),
+    street = rep('', com.target),
+    city = rep('', com.target),
+    state = rep('MA', com.target),
+    zip = rep('', com.target),
+    identification = NA,
+    developer = NA,
+    source = 'mapc',
+    notes = rep('', com.target),
+    employment_capacity = rep(120, com.target)
+    )
+
+mapc.res <- res.sim |> filter(block_id %in% mapc.blks)
+mapc.com <- com.sim |> filter(block_id %in% mapc.blks)
+
+fwrite(res.sim, paste0(scen3_path,'Inputs/swm_residential_development_simulated_EEA_Scenario_3_and_4.csv'))
+fwrite(com.sim, paste0(scen3_path,'Inputs/swm_nonresidential_development_simulated_EEA_Scenario_3_and_4.csv'))
+fwrite(mapc.res, paste0(scen3_path,'Inputs/mapcm_residential_development_simulated_EEA_Scenario_3_and_4.csv'))
+fwrite(mapc.com, paste0(scen3_path,'Inputs/mapcm_nonresidential_development_simulated_EEA_Scenario_3_and_4.csv'))
 
 
 
 ```
 
-# 4 - Skims Adjustments
+# 4 - Temp Zoning Adjustments Scen 4
 
 ```{r}
 
-cong.taz <- fread()
+e4 <- st_read(dsn = scen4_gdb, layer = 'EEA_Scenario_4_conservation_TOD_erase')
+tod <- st_read(dsn = scen4_gdb, layer = 'TOD_100dua_zones')
+cons <- st_read(dsn = scen4_gdb, layer = 'Scenario_3_and_4_conservation2050')
+
+s4.comp <- rbind(e4, tod, cons)
+st_write(s4.comp,dsn=scen4_gdb,layer='EEA_Scenario_4_merged_with_gaps')
+
+st_write(s4.comp,
+         dsn='C:/Users/cgate/Desktop/EEA_scratch/Scenario_4.gdb',
+         layer='EEA_Scenario_4_merged_with_gaps'
+         )
+
+```
+

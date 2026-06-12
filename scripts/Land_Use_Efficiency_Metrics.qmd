@@ -35,6 +35,7 @@ if (grepl('VM',Sys.info()[['nodename']])){
 
 data_path <- file.path(base,'Projects/Current_Projects/Environment/EEA_MLCA/Data')
 task_path = paste0(data_path,'/Task_3/')
+deliv_path = paste0(task_path, 'Deliverables')
 sp_path <- paste0(task_path,'Spatial/')
 task_gdb = paste0(sp_path, 'LandUse_Efficiency_Metrics.gdb')
 task_gdb2 = paste0(sp_path, 'LUE_Metrics.gdb')
@@ -1593,7 +1594,7 @@ nlcd23.tract <- readRDS(paste0(sp_path, 'nlcd2023_dev_area_tract.rds')) |>
   select(ct20_id, dev_acres_2023)
 
 # NLCD within parcel denominators
-dev.res14.tract <- st_read(dsn=task_gdb, layer='nlcd2014_developed_in_residential_parcel') %>% 
+dev.res14.tract <- st_read(dsn=task_gdb2, layer='nlcd2014_developed_in_residential_parcel') %>% 
   st_transform(crs=st_crs(ct20)) %>%
   st_intersection(ct20) %>%
   mutate(
@@ -1607,7 +1608,7 @@ dev.res14.tract <- st_read(dsn=task_gdb, layer='nlcd2014_developed_in_residentia
   summarize(dev_res_acres_2014 = sum(dev_res_acres_2014))
 saveRDS(dev.res14.tract,paste0(sp_path,'nlcd2014_dev_res_tract.rds'))
 
-dev.com14.tract <- st_read(dsn=task_gdb, layer='nlcd2014_developed_in_commercial_parcel') %>% 
+dev.com14.tract <- st_read(dsn=task_gdb2, layer='nlcd2014_developed_in_commercial_parcel') %>% 
   st_transform(crs=st_crs(ct20)) %>%
   st_intersection(ct20) %>%
   mutate(
@@ -1621,7 +1622,7 @@ dev.com14.tract <- st_read(dsn=task_gdb, layer='nlcd2014_developed_in_commercial
   summarize(dev_com_acres_2014 = sum(dev_com_acres_2014))
 saveRDS(dev.com14.tract,paste0(sp_path,'nlcd2014_dev_com_tract.rds'))
 
-dev.res23.tract <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_residential_parcel') %>% 
+dev.res23.tract <- st_read(dsn=task_gdb2, layer='nlcd2023_developed_in_residential_parcel') %>% 
   st_transform(crs=st_crs(ct20)) %>%
   st_intersection(ct20) %>%
   mutate(
@@ -1635,7 +1636,7 @@ dev.res23.tract <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_residentia
   summarize(dev_res_acres_2023 = sum(dev_res_acres_2023))
 saveRDS(dev.res23.tract,paste0(sp_path,'nlcd2023_dev_res_tract.rds'))
 
-dev.com23.tract <- st_read(dsn=task_gdb, layer='nlcd2023_developed_in_commercial_parcel') %>% 
+dev.com23.tract <- st_read(dsn=task_gdb2, layer='nlcd2023_developed_in_commercial_parcel') %>% 
   st_transform(crs=st_crs(ct20)) %>%
   st_intersection(ct20) %>%
   mutate(
@@ -1710,6 +1711,7 @@ met.res.ct <- met.ct |>
     )
 
 st_write(met.res.ct, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_tract', append=F)
+fwrite(met.res.ct |> st_drop_geometry(), paste0(deliv_path,'/pop_hh_unit_res_acre_tract.csv'))
 
 met.com.ct <- met.ct |> 
   group_by(ct20_id) |> 
@@ -1751,7 +1753,7 @@ met.com.ct <- met.ct |>
   )
 
 st_write(met.com.ct, dsn=task_gdb2, layer = 'emp_com_acre_tract', append=F)
-
+fwrite(met.com.ct |> st_drop_geometry(), paste0(deliv_path,'/emp_com_acre_tract.csv'))
 
 # Metrics by NLCD developed land acreage
 met.dev.ct <- met.ct |> 
@@ -1826,23 +1828,42 @@ met.dev.ct <- met.ct |>
   )
 
 st_write(met.dev.ct, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_tract', append=F)
+fwrite(met.dev.ct |> st_drop_geometry(), paste0(deliv_path,'/pop_hh_units_emp_dev_acre_tract.csv'))
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
 met.dev.res.ct <- met.ct |> 
   group_by(ct20_id) |> 
   summarize(
+    res_acres_2014 = res_acres_2014,
+    dev_acres_2014 = dev_acres_2014,
+    dev_res_acres_2014 = dev_res_acres_2014,
+    res_acres_2023 = res_acres_2023,
+    dev_acres_2023 = dev_acres_2023,
+    dev_res_acres_2023 = dev_res_acres_2023,
+    chg_res_acres = res_acres_2023 - res_acres_2014,
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
+    pct_chg_res_acres = 100*(res_acres_2023 - res_acres_2014)/res_acres_2014,
+    pct_chg_dev_acres = 100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,
+    pct_chg_dev_res_acres = 100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,
     pop_acre_2014 = total_pop_2014 / dev_res_acres_2014,
     hh_acre_2014 = total_households_2014 / dev_res_acres_2014,
     units_acre_2014 = total_units_2014 / dev_res_acres_2014,
+    pop_acre_2023 = total_pop_2023 / dev_res_acres_2023,
+    hh_acre_2023 = total_households_2023 / dev_res_acres_2023,
+    units_acre_2023 = total_units_2023 / dev_res_acres_2023,
+    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
+    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
+    chg_units_acre = units_acre_2023 - units_acre_2014,
+    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
+    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
+    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
     units_1_acre_2014 = units_1_2014 / dev_res_acres_2014,
     units_2_acre_2014 = units_2_2014 / dev_res_acres_2014,
     units_3_4_acre_2014 = units_3_4_2014 / dev_res_acres_2014,
     units_5_9_acre_2014 = units_5_9_2014 / dev_res_acres_2014,
     units_10p_acre_2014 = units_10p_2014 / dev_res_acres_2014,
-    pop_acre_2023 = total_pop_2023 / dev_res_acres_2023,
-    hh_acre_2023 = total_households_2023 / dev_res_acres_2023,
-    units_acre_2023 = total_units_2023 / dev_res_acres_2023,
     units_1_acre_2023 = units_1_2023 / dev_res_acres_2023,
     units_2_acre_2023 = units_2_2023 / dev_res_acres_2023,
     units_3_4_acre_2023 = units_3_4_2023 / dev_res_acres_2023,
@@ -1854,23 +1875,30 @@ met.dev.res.ct <- met.ct |>
     chg_units_10p_acre = units_10p_acre_2023 - units_10p_acre_2014,
     units_MF_acre_2014 = sum(units_2_2014 + units_3_4_2014 + units_5_9_2014 + units_10p_2014) / sum(dev_res_acres_2014),
     units_MF_acre_2023 = sum(units_2_2023 + units_3_4_2023 + units_5_9_2023 + units_10p_2023) / sum(dev_res_acres_2023),
-    chg_pop_acre = pop_acre_2023 - pop_acre_2014,
-    chg_hh_acre = hh_acre_2023 - hh_acre_2014,
-    chg_units_acre = units_acre_2023 - units_acre_2014,
     chg_units_SF_acre = units_1_acre_2023 - units_1_acre_2014,
     chg_units_MF_acre = units_MF_acre_2023 - units_MF_acre_2014,
-    pct_chg_pop_acre = 100*(pop_acre_2023 - pop_acre_2014)/pop_acre_2014,
-    pct_chg_hh_acre = 100*(hh_acre_2023 - hh_acre_2014)/hh_acre_2014,
-    pct_chg_units_acre = 100*(units_acre_2023 - units_acre_2014)/units_acre_2014,
     pct_chg_units_SF_acre = 100*(units_1_acre_2023 - units_1_acre_2014)/units_1_acre_2014,
     pct_chg_units_MF_acre = 100*(units_MF_acre_2023 - units_MF_acre_2014)/units_MF_acre_2014
     )
 
 st_write(met.dev.res.ct, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_tract', append = FALSE)
+fwrite(met.dev.res.ct |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_unit_nlcd_dev_in_res_acre_tract.csv'))
 
 met.dev.com.ct <- met.ct |> 
   group_by(ct20_id) |> 
   summarize(
+    com_acres_2014 = com_acres_2014,
+    dev_acres_2014 = dev_acres_2014,
+    dev_com_acres_2014 = dev_com_acres_2014,
+    com_acres_2023 = com_acres_2023,
+    dev_acres_2023 = dev_acres_2023,
+    dev_com_acres_2023 = dev_com_acres_2023,
+    chg_com_acres = com_acres_2023 - com_acres_2014,
+    chg_dev_acres = dev_acres_2023 - dev_acres_2014,
+    chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
+    pct_chg_com_acres = 100*(com_acres_2023 - com_acres_2014)/com_acres_2014,
+    pct_chg_dev_acres = 100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,
+    pct_chg_dev_com_acres = 100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,
     emp_acre_2014 = emp2014 / dev_com_acres_2014,
     emp_sect_1_acre_2014 = emp_2014_sect_1 / dev_com_acres_2014,
     emp_sect_2_acre_2014 = emp_2014_sect_2 / dev_com_acres_2014,
@@ -1908,7 +1936,7 @@ met.dev.com.ct <- met.ct |>
   )
 
 st_write(met.dev.com.ct, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_tract', append=F)
-
+fwrite(met.dev.com.ct |> st_drop_geometry(), paste0(deliv_path, '/emp_nlcd_dev_in_com_acre_tract.csv'))
 
 ```
 
@@ -2035,7 +2063,7 @@ saveRDS(dev.com23.muni,paste0(sp_path,'nlcd2023_dev_com_muni.rds'))
 
 ```
 
-# 12b - Muni Metrics
+# 11b - Muni Metrics
 
 ```{r}
 # Muni Metrics
@@ -2101,6 +2129,7 @@ met.res.muni <- met.muni |>
     )
 
 st_write(met.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_muni', append = F)
+fwrite(met.res.muni |> st_drop_geometry(), paste0(deliv_path,'/pop_hh_unit_res_acre_muni.csv'))
 
 met.com.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |> 
@@ -2144,7 +2173,7 @@ met.com.muni <- met.muni |>
   )
 
 st_write(met.com.muni, dsn=task_gdb2, layer = 'emp_com_acre_muni', append=F)
-
+fwrite(met.com.muni |> st_drop_geometry(), paste0(deliv_path,'/emp_com_acre_muni.csv'))
 
 # Metrics by NLCD developed land acreage
 met.dev.muni <- met.muni |> 
@@ -2223,6 +2252,7 @@ met.dev.muni <- met.muni |>
   )
 
 st_write(met.dev.muni, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_muni', append =F)
+fwrite(met.dev.muni |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_units_emp_dev_acre_muni.csv'))
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
@@ -2268,7 +2298,7 @@ met.dev.res.muni <- met.muni |>
     )
 
 st_write(met.dev.res.muni, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_muni', append=F)
-
+fwrite(met.dev.res.muni |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_unit_nlcd_dev_in_res_acre_muni.csv'))
 
 met.dev.com.muni <- met.muni |> 
   group_by(muni_id, muni_name, cmsbt08, mpo) |>  
@@ -2314,6 +2344,7 @@ met.dev.com.muni <- met.muni |>
   )
 
 st_write(met.dev.com.muni, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_muni', append = F)
+fwrite(met.dev.com.muni |> st_drop_geometry(), paste0(deliv_path, '/emp_nlcd_dev_in_com_acre_muni.csv'))
 
 ```
 
@@ -2369,6 +2400,7 @@ met.res.cmsbt08 <- met.muni |>
     )
 
 st_write(met.res.cmsbt08, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_cmsbt08', append = F)
+fwrite(met.res.cmsbt08 |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_unit_res_acre_cmsbt08.csv'))
 
 met.com.cmsbt08 <- met.muni |> 
   group_by(cmsbt08) |> 
@@ -2416,7 +2448,7 @@ met.com.cmsbt08 <- met.muni |>
   )
 
 st_write(met.com.cmsbt08, dsn=task_gdb2, layer = 'emp_com_acre_cmsbt08', append=F)
-
+fwrite(met.com.cmsbt08 |> st_drop_geometry(), paste0(deliv_path,'/emp_com_acre_cmsbt08.csv'))
 
 # Metrics by NLCD developed land acreage
 met.dev.cmsbt08 <- met.muni |> 
@@ -2497,6 +2529,7 @@ met.dev.cmsbt08 <- met.muni |>
   )
 
 st_write(met.dev.cmsbt08, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_cmsbt08', append =F)
+fwrite(met.dev.cmsbt08 |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_units_emp_dev_acre_cmsbt08.csv'))
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
@@ -2545,6 +2578,7 @@ met.dev.res.cmsbt08 <- met.muni |>
 
 st_write(met.dev.res.cmsbt08, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_cmsbt08', append=F)
 
+fwrite(met.dev.res.cmsbt08 |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_unit_nlcd_dev_in_res_acre_cmsbt08.csv'))
 
 met.dev.com.cmsbt08 <- met.muni |> 
   group_by(cmsbt08) |>  
@@ -2575,16 +2609,16 @@ met.dev.com.cmsbt08 <- met.muni |>
     emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023)
   )|> 
   mutate(
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
+    chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
+    chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
+    chg_emp_sect_4_acre = emp_2023_sect_4_acre - emp_2014_sect_4_acre,
+    chg_emp_sect_5_acre = emp_2023_sect_5_acre - emp_2014_sect_5_acre,
+    chg_emp_sect_6_acre = emp_2023_sect_6_acre - emp_2014_sect_6_acre,
+    chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
+    chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
+    chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
     chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
     chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
@@ -2592,7 +2626,7 @@ met.dev.com.cmsbt08 <- met.muni |>
   )
 
 st_write(met.dev.com.cmsbt08, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_cmsbt08', append = F)
-
+fwrite(met.dev.com.cmsbt08 |> st_drop_geometry(), paste0(deliv_path, '/emp_nlcd_dev_in_com_acre_cmsbt08.csv'))
 ```
 
 # 13 - MPO and statewide
@@ -2685,9 +2719,12 @@ met.res.mpo <- met.muni |>
     chg_res_acres = res_acres_2023 - res_acres_2014,
     pct_chg_res_acres = round(100*(chg_res_acres/sum(res_acres_2014)),1)
     ) |> 
-  rbind(met.res.sw)
+  rbind(met.res.sw)%>%
+  st_make_valid(.)%>%
+  st_cast('MULTIPOLYGON')
 
 st_write(met.res.mpo, dsn=task_gdb2, layer = 'pop_hh_unit_res_acre_mpo', append = F)
+fwrite(met.res.mpo |> st_drop_geometry(), paste0(deliv_path,'/pop_hh_unit_res_acre_mpo.csv'))
 
 met.com.sw <- met.muni |> 
   summarize(
@@ -2778,9 +2815,12 @@ met.com.mpo <- met.muni |>
     chg_com_acres = com_acres_2023 - com_acres_2014,
     pct_chg_com_acres = round(100*(com_acres_2023 - com_acres_2014)/com_acres_2014,1)
   ) |> 
-  rbind(met.com.sw)
+  rbind(met.com.sw)%>%
+  st_make_valid(.)%>%
+  st_cast('MULTIPOLYGON')
 
 st_write(met.com.mpo, dsn=task_gdb2, layer = 'emp_com_acre_mpo', append=F)
+fwrite(met.com.mpo |> st_drop_geometry(), paste0(deliv_path,'/emp_com_acre_mpo.csv'))
 
 
 # Metrics by NLCD developed land acreage
@@ -2936,10 +2976,13 @@ met.dev.mpo <- met.muni |>
     pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
     chg_dev_acres = dev_acres_2023 - dev_acres_2014,
     pct_chg_dev_acres = round(100*(dev_acres_2023 - dev_acres_2014)/dev_acres_2014,1)
-  ) |> 
+  ) %>%
+  st_make_valid(.)%>%
+  st_cast('MULTIPOLYGON') |> 
   rbind(met.dev.sw)
 
 st_write(met.dev.mpo, dsn=task_gdb2, layer = 'pop_hh_units_emp_dev_acre_mpo', append =F)
+fwrite(met.dev.mpo |> st_drop_geometry(), paste0(deliv_path,'/pop_hh_units_emp_dev_acre_mpo.csv'))
 
 # Metrics by NLCD developed land IN parcel res/com acreage
 
@@ -3028,9 +3071,12 @@ met.dev.res.mpo <- met.muni |>
     chg_dev_res_acres = dev_res_acres_2023 - dev_res_acres_2014,
     pct_chg_dev_res_acres = round(100*(dev_res_acres_2023 - dev_res_acres_2014)/dev_res_acres_2014,1)
     ) |> 
-  rbind(met.dev.res.sw)
+  rbind(met.dev.res.sw) %>%
+  st_make_valid(.) %>%
+  st_cast(.,'MULTIPOLYGON')
 
 st_write(met.dev.res.mpo, dsn=task_gdb2, layer = 'pop_hh_unit_nlcd_dev_in_res_acre_mpo', append=F)
+fwrite(met.dev.res.mpo |> st_drop_geometry(), paste0(deliv_path, '/pop_hh_unit_nlcd_dev_in_res_acre_mpo.csv'))
 
 met.dev.com.sw <- met.muni |>
   summarize(
@@ -3060,16 +3106,16 @@ met.dev.com.sw <- met.muni |>
     emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023)
   )|> 
   mutate(
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
+    chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
+    chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
+    chg_emp_sect_4_acre = emp_2023_sect_4_acre - emp_2014_sect_4_acre,
+    chg_emp_sect_5_acre = emp_2023_sect_5_acre - emp_2014_sect_5_acre,
+    chg_emp_sect_6_acre = emp_2023_sect_6_acre - emp_2014_sect_6_acre,
+    chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
+    chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
+    chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
     chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
     chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
@@ -3106,24 +3152,27 @@ met.dev.com.mpo <- met.muni |>
     emp_2023_sect_10_acre = sum(emp_2023_sect_10) / sum(dev_com_acres_2023)
   )|> 
   mutate(
-    chg_emp_sect_1_acre = emp_2023_sect_1 - emp_2014_sect_1,
-    chg_emp_sect_2_acre = emp_2023_sect_2 - emp_2014_sect_2,
-    chg_emp_sect_3_acre = emp_2023_sect_3 - emp_2014_sect_3,
-    chg_emp_sect_4_acre = emp_2023_sect_4 - emp_2014_sect_4,
-    chg_emp_sect_5_acre = emp_2023_sect_5 - emp_2014_sect_5,
-    chg_emp_sect_6_acre = emp_2023_sect_6 - emp_2014_sect_6,
-    chg_emp_sect_7_acre = emp_2023_sect_7 - emp_2014_sect_7,
-    chg_emp_sect_8_acre = emp_2023_sect_8 - emp_2014_sect_8,
-    chg_emp_sect_9_acre = emp_2023_sect_9 - emp_2014_sect_9,
-    chg_emp_sect_10_acre = emp_2023_sect_10 - emp_2014_sect_10,
+    chg_emp_sect_1_acre = emp_2023_sect_1_acre - emp_2014_sect_1_acre,
+    chg_emp_sect_2_acre = emp_2023_sect_2_acre - emp_2014_sect_2_acre,
+    chg_emp_sect_3_acre = emp_2023_sect_3_acre - emp_2014_sect_3_acre,
+    chg_emp_sect_4_acre = emp_2023_sect_4_acre - emp_2014_sect_4_acre,
+    chg_emp_sect_5_acre = emp_2023_sect_5_acre - emp_2014_sect_5_acre,
+    chg_emp_sect_6_acre = emp_2023_sect_6_acre - emp_2014_sect_6_acre,
+    chg_emp_sect_7_acre = emp_2023_sect_7_acre - emp_2014_sect_7_acre,
+    chg_emp_sect_8_acre = emp_2023_sect_8_acre - emp_2014_sect_8_acre,
+    chg_emp_sect_9_acre = emp_2023_sect_9_acre - emp_2014_sect_9_acre,
+    chg_emp_sect_10_acre = emp_2023_sect_10_acre - emp_2014_sect_10_acre,
     chg_emp_acre = emp_acre_2023 - emp_acre_2014,
     pct_chg_emp_acre = 100*(emp_acre_2023 - emp_acre_2014)/emp_acre_2014,
     chg_dev_com_acres = dev_com_acres_2023 - dev_com_acres_2014,
     pct_chg_dev_com_acres = round(100*(dev_com_acres_2023 - dev_com_acres_2014)/dev_com_acres_2014,1)
   ) |> 
-  rbind(met.dev.com.sw)
+  rbind(met.dev.com.sw) %>%
+  st_make_valid(.) %>%
+  st_cast(.,'MULTIPOLYGON')
 
 st_write(met.dev.com.mpo, dsn=task_gdb2, layer = 'emp_nlcd_dev_in_com_acre_mpo', append = F)
+fwrite(met.dev.com.mpo |> st_drop_geometry(), paste0(deliv_path, '/emp_nlcd_dev_in_com_acre_mpo.csv'))
 
 ```
 
