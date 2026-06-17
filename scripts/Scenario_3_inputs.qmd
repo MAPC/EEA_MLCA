@@ -117,7 +117,10 @@ tod.sf <- st_to_sf(tod.tab)
 ```{r}
 blk2010 <- mapcdatakeys::block_sf(2010)
 
-mapc.blks <- left_join(blk2010,mapcdatakeys::all_muni_data_keys |> select(muni_id,rpa_acr), by='muni_id') |> pull(bl10_id) |> unique()
+mapc.blks <- left_join(blk2010,mapcdatakeys::all_muni_data_keys |> select(muni_id,rpa_acr), by='muni_id') |> 
+  filter(rpa_acr=='MAPC') |> 
+  pull(bl10_id) |> 
+  unique()
 
 # sewer <- st_read(dsn = scen4_gdb, layer = 'parcel_sewer_service_area_constraint_erase')
 sewer <- st_read(dsn = 'C:/Users/cgate/Desktop/EEA_scratch/Scenario_4.gdb', layer = 'parcel_sewer_service_area_constraint_erase')
@@ -268,6 +271,20 @@ st_write(s4.comp,
          dsn='C:/Users/cgate/Desktop/EEA_scratch/Scenario_4.gdb',
          layer='EEA_Scenario_4_merged_with_gaps'
          )
+
+```
+
+```{python}
+arcpy.cartography.SimplifyPolygon(
+    in_features="EEA_Scenario_4_zoning_constraint",
+    out_feature_class=r"C:\Users\cgate\Desktop\EEA_scratch\EEA_scratch.gdb\EEA_Scenario_4_zoning_constraint_simplify",
+    algorithm="POINT_REMOVE",
+    tolerance="10 Meters",
+    minimum_area="0 SquareMeters",
+    error_option="RESOLVE_ERRORS",
+    collapsed_point_option="KEEP_COLLAPSED_POINTS",
+    in_barriers="ma_municipalities_cropped_to_coastline"
+)
 
 ```
 
