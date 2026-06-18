@@ -41,14 +41,16 @@ scen1_sp_path = paste0(data_path,'/Task_4/Scenario_1/Zoning/Spatial/')
 scen1_gdb = paste0(scen1_sp_path, 'Scenario_1.gdb')
 scen2_sp_path = paste0(data_path,'/Task_4/Scenario_2/Zoning/Spatial/')
 scen2_gdb = paste0(scen2_sp_path, 'Scenario_2.gdb')
-scen3_sp_path = paste0(data_path,'/Task_4/Scenario_3/Zoning/Spatial/')
+scen3_sp_path = paste0(data_path,'/Task_4/Scenario_3/Inputs/Spatial/')
 scen3_gdb = paste0(scen3_sp_path, 'Scenario_3.gdb')
-scen4_sp_path = paste0(data_path,'/Task_4/Scenario_4/Zoning/Spatial/')
+scen4_sp_path = paste0(data_path,'/Task_4/Scenario_4/Inputs/Spatial/')
 scen4_gdb = paste0(scen4_sp_path, 'Scenario_4.gdb')
 
-sp_path <- scen2_sp_path
+sp_path <- scen3_sp_path
 tab_path <- paste0(data_path,'/Tabular/')
-project_gdb <- scen2_gdb
+project_gdb <- scen3_gdb
+
+base_sp <- file.path(data_path,'Spatial')
 
 # tab_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
 # sp_path <- 'C:/Users/cgate/Desktop/ArcPro_scratch/EEA_MLCA/'
@@ -891,3 +893,76 @@ arcpy.conversion.ExportFeatures(
 
 ```
 
+
+
+# 6 - Generating block-level constraints for UrbanCanvas
+
+```{r}
+
+gp <- st_read(dsn = file.path(scen3_sp_path,'mapc_uc_constraints_update_20241011.gpkg'), layer = 'mapc_uc_constraints_revised_20241011')
+
+s3 <- fread(paste0(base_sp,'/EEA_scratch/EEA_Scenario_3_zoning_block_inter.csv'))
+
+b3 <- s3 |> 
+  mutate(block_id_2010 = as.character(bl10_id)) |> 
+  group_by(block_id_2010) |> 
+  summarize(
+    total_units = sum(total_units),
+    total_jobs = sum(total_jobs),
+    area_m2 = sum(Shape_Area)
+  ) |> 
+  ungroup() |> 
+  mutate(
+    area_acres = area_m2 * 0.000247105,
+    max_dua = total_units / area_acres,
+    max_eda = total_jobs / area_acres,
+    start_date = 2023,
+    end_date = 2050,
+    name = "EEA_Scenario_3_constraints",
+    notes = "EEA_Scenario_3_constraints",
+    tags = "EEA_Scenario_3_constraints"
+    ) |> 
+  select(block_id_2010, max_dua,max_eda, start_date, end_date, name, notes, tags) |> 
+  setDT()
+b3[,uc_constraint_id:=.I]
+fwrite(b3,paste0(base_sp,'/EEA_Scenario_3_zoning_constraints_block2010.csv'))
+
+
+s4 <- fread(paste0(base_sp,'/EEA_scratch/EEA_Scenario_4_zoning_block_inter.csv'))
+
+b4 <- s4 |> 
+  mutate(block_id_2010 = as.character(bl10_id)) |> 
+  group_by(block_id_2010) |> 
+  summarize(
+    total_units = sum(total_units),
+    total_jobs = sum(total_jobs),
+    area_m2 = sum(Shape_Area)
+  ) |> 
+  ungroup() |> 
+  mutate(
+    area_acres = area_m2 * 0.000247105,
+    max_dua = total_units / area_acres,
+    max_eda = total_jobs / area_acres,
+    start_date = 2023,
+    end_date = 2050,
+    name = "EEA_Scenario_4_constraints",
+    notes = "EEA_Scenario_4_constraints",
+    tags = "EEA_Scenario_4_constraints"
+    ) |> 
+  select(block_id_2010, max_dua,max_eda, start_date, end_date, name, notes, tags) |> 
+  setDT()
+b4[,uc_constraint_id:=.I]
+fwrite(b4,paste0(base_sp,'/EEA_Scenario_4_zoning_constraints_block2010.csv'))
+
+mapc.blks <- fread(paste0(base_sp,'/EEA_scratch/mapc_census_blocks_2010.csv')) |> 
+  mutate(block_id = as.character(block_id))
+
+m3 <- b3 |> filter(block_id_2010 %in% mapc.blks$block_id)
+m4 <- b4 |> filter(block_id_2010 %in% mapc.blks$block_id)
+
+
+fwrite(m3,paste0(base_sp,'/EEA_Scenario_3_MAPCM_zoning_constraints_block2010.csv'))
+
+fwrite(m4,paste0(base_sp,'/EEA_Scenario_4_MAPCM_zoning_constraints_block2010.csv'))
+
+```
