@@ -77,22 +77,22 @@ lun <- function(x){length(unique(x))}
 # ctps_run <- paste0(SWM_run,'-',MAPCM_run)
 
 # Scenario 2 (Current Policies)
-scen <- 'Scenario_2'
-MAPCM_run <- 's104'
-SWM_run <- 's63'
-ctps_run <- paste0(SWM_run,'-',MAPCM_run)
+# scen <- 'Scenario_2'
+# MAPCM_run <- 's104'
+# SWM_run <- 's63'
+# ctps_run <- paste0(SWM_run,'-',MAPCM_run)
 
 # Scenario 3 ()
 # scen <- 'Scenario_3'
-# MAPCM_run <- ''
-# SWM_run <- ''
+# MAPCM_run <- 'run_247'
+# SWM_run <- 's144'
 # ctps_run <- paste0(SWM_run,'-',MAPCM_run)
 
 # Scenario 4 ()
-# scen <- 'Scenario_4'
-# MAPCM_run <- ''
-# SWM_run <- ''
-# ctps_run <- paste0(SWM_run,'-',MAPCM_run)
+scen <- 'Scenario_4'
+MAPCM_run <- 'run_246'
+SWM_run <- 's145'
+ctps_run <- paste0(SWM_run,'-',MAPCM_run)
 
 # Conservation Test
 # years <- c(2011,2012,2013,2014)
@@ -115,7 +115,7 @@ knitr::opts_knit$set(root.dir = data_path)
 pums13 <-
   readRDS(file.path(scen_path,'pums2013_microsim_households_short.rds'))
 
-for (run in c(MAPCM_run, SWM_run)) {
+for (run in c(SWM_run)) {
 # for (run in c(MAPCM_run)) {
   for (yr in years) {
     hh <- fread(file.path(scen_path, run, yr, 'households.csv'))
@@ -290,8 +290,8 @@ setnames(mmc, 'rpa_acr', 'mpo')
 
 # Load UMDI HHpop comparison data
 # Rebel towns are in OCPC
-# for (run in c(MAPCM_run, SWM_run)) {
-for (run in c(MAPCM_run)) {
+for (run in c(MAPCM_run, SWM_run)) {
+# for (run in c(MAPCM_run)) {
   if (run == MAPCM_run) {
     umdi <- fread(file.path(shop_path, 'pop.in.hhds.MAPC101_by.RPA.ageCAT6.csv')) |>
       select(year, rpa_acr, ageCAT6, hhpop) |>
@@ -611,8 +611,8 @@ cx <- function(x) {
 # 2.4 - Post-processor 04 - run person duplication/subtraction
 
 ```{r}
-# for (run in c(MAPCM_run, SWM_run)) {
-for (run in c(MAPCM_run)) {
+for (run in SWM_run) {
+# for (run in MAPCM_run) {
   for (yr in years) {
     flaglist <- data.table()
     
@@ -1556,6 +1556,7 @@ dev[,acres:=NULL]
 
 y2 <- c(2010,2019,2024,2034,2049)
 
+
 for (run in SWM_run) {
   for (yr in y2) {
     dt <- fread(
@@ -1699,14 +1700,7 @@ for (run in SWM_run) {
              yr,
              '.csv'
            ))
-    
-    # Export as spatial layer
-    # dt[, bl10_id := as.character(block_id_2010)]
-    # dt.sf <- swm.blk |>
-    #   left_join(dt, by = 'bl10_id') |>
-    #   select(-muni_id.y, -block_id_2010) |>
-    #   rename(muni_id = muni_id.x)
-    
+
     dt.hh <- dt |>
       select(
         bl10_id,
@@ -1892,14 +1886,7 @@ for (run in MAPCM_run) {
              yr + 1,
              '.csv'
            ))
-    
-    # Export as spatial layer
-    # dt[, bl10_id := as.character(block_id_2010)]
-    # dt.sf <- sub.blk |>
-    #   left_join(dt, by = 'bl10_id') |>
-    #   select(-muni_id.y, -block_id_2010) |>
-    #   rename(muni_id = muni_id.x)
-    
+
 dt.hh <- dt |>
       select(
         bl10_id,
@@ -2229,11 +2216,11 @@ fwrite(m5, paste0(scen_path,'/',scen,'_urbansim_block_indicators.csv'))
 
 ```
 
-# 3.2 - Scenario outputs For HF LULC Change Analysis
+# 3.1 - Scenario 1 outputs For HF LULC Change Analysis
 
 ```{r}
 
-s1 <- fread(paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_urbansim_indicators_block2010.csv')) |> 
+s1 <- fread(paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_full_indicators_block.csv')) |> 
   select(block_id,
          block_acres,
          developable_acres,
@@ -2285,14 +2272,18 @@ st_write(s1, paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_bl
 ns <- names(s1)[4:ncol(s1)]
 setDT(s1)
 s1[,blockgroup_id := substr(block_id, 1, 12)]
-s1.bg <- s1[,lapply(.SDcols,sum),blockgroup_id,.SDcols=(ns)] 
+s1.bg <- s1[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
 s1.bg <- st_as_sf(s1.bg)
 
 st_write(s1.bg, dsn = urbsim_gpkg, layer = 'Scenario_1_blockgroup_indicators', append=F)
 
+```
+
+# 3.2 - Scenario 2 outputs For HF LULC Change Analysis
+```{r}
 # Scenario 2
 
-s2 <- fread(paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_urbansim_indicators_block2010.csv')) |> 
+s2 <- fread(paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_full_indicators_block.csv')) |> 
   select(block_id,
          block_acres,
          developable_acres,
@@ -2343,11 +2334,146 @@ st_write(s2, dsn = urbsim_gpkg, layer = 'Scenario_2_block_indicators', append=F)
 ns <- names(s2)[4:ncol(s2)]
 setDT(s2)
 s2[,blockgroup_id := substr(block_id, 1, 12)]
-s2.bg <- s2[,lapply(.SDcols,sum),blockgroup_id,.SDcols=(ns)] 
+s2.bg <- s2[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
 s2.bg <- st_as_sf(s2.bg)
 
 st_write(s2.bg, dsn = urbsim_gpkg, layer = 'Scenario_2_blockgroup_indicators', append=F)
 
+```
+
+# 3.3 - Scenario 3 outputs For HF LULC Change Analysis
+```{r}
+# Scenario 3
+
+s3 <- fread(paste0(data_path,'/Task_4/Scenario_3/UrbanSim_Outputs/',scen,'_full_indicators_block.csv')) |> 
+  mutate(scenario = 'Scenario_3',
+         block_id = as.character(block_id),
+         blockgroup_id = substr(block_id, 1, 12)
+         )|> 
+  select(scenario,
+         block_id,
+         blockgroup_id,
+         block_acres,
+         developable_acres,
+         total_households_2010,
+         total_households_2020,
+         total_households_2025,
+         total_households_2035,
+         total_households_2050,
+         total_residential_units_2010,
+         total_residential_units_2020,
+         total_residential_units_2025,
+         total_residential_units_2035,
+         total_residential_units_2050,
+         single_fam_units_2010,
+         single_fam_units_2020,
+         single_fam_units_2025,
+         single_fam_units_2035,
+         single_fam_units_2050,
+         multi_fam_units_2010,
+         multi_fam_units_2020,
+         multi_fam_units_2025,
+         multi_fam_units_2035,
+         multi_fam_units_2050,
+         total_jobs_2010,
+         total_jobs_2020,
+         total_jobs_2025,
+         total_jobs_2035,
+         total_jobs_2050) |> 
+  mutate(
+    HH_change_2010_2020 = total_households_2020 - total_households_2010,
+    HH_change_2020_2050 = total_households_2050 - total_households_2020,
+    unit_change_2010_2020 = total_residential_units_2020 - total_residential_units_2010,
+    unit_change_2020_2050 = total_residential_units_2050 - total_residential_units_2020,
+    sf_unit_change_2010_2020 = single_fam_units_2020 - single_fam_units_2010,     
+    sf_unit_change_2020_2050 = single_fam_units_2050 - single_fam_units_2020,
+    mf_unit_change_2010_2020 = multi_fam_units_2020 - multi_fam_units_2010,     
+    mf_unit_change_2020_2050 = multi_fam_units_2050 - multi_fam_units_2020,
+    emp_change_2010_2020 = total_jobs_2020 - total_jobs_2010,     
+    emp_change_2020_2050 = total_jobs_2050 - total_jobs_2020
+         ) |> 
+  right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
+  relocate(muni_id,muni_name,rpa_acr,mpo, .after=block_id)
+
+st_write(s3, dsn = paste0(scen_path,'/Scenario_3_urbansim_block_indicators.gpkg'), layer = 'Scenario_3_block_indicators', append=F)
+
+# st_write(s3, dsn = 'C:/Users/cgate/Desktop/Scenario_3_urbansim_outputs.gpkg', layer = 'Scenario_3_block_indicators', append=F)
+
+
+ns <- names(s3)[8:(ncol(s3)-1)]
+
+s3.bg <- s3[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
+s3.bg.exp <- left_join(blockgroup_sf(2010),s3.bg,by=c('bg10_id'='blockgroup_id'))
+
+st_write(s3.bg.exp, dsn = paste0(scen_path,'/Scenario_3_urbansim_blockgroup_indicators.gpkg'), layer = 'Scenario_3_blockgroup_indicators', append=F)
+```
+
+# 3.4 - Scenario 4 outputs For HF LULC Change Analysis
+```{r}
+
+# Scenario 4
+
+s4 <- fread(paste0(data_path,'/Task_4/Scenario_4/UrbanSim_Outputs/',scen,'_full_indicators_block.csv')) |> 
+  mutate(scenario = 'Scenario_4',
+         block_id = as.character(block_id),
+         blockgroup_id = substr(block_id, 1, 12)
+         )|> 
+  select(scenario,
+         block_id,
+         blockgroup_id,
+         block_acres,
+         developable_acres,
+         total_households_2010,
+         total_households_2020,
+         total_households_2025,
+         total_households_2035,
+         total_households_2050,
+         total_residential_units_2010,
+         total_residential_units_2020,
+         total_residential_units_2025,
+         total_residential_units_2035,
+         total_residential_units_2050,
+         single_fam_units_2010,
+         single_fam_units_2020,
+         single_fam_units_2025,
+         single_fam_units_2035,
+         single_fam_units_2050,
+         multi_fam_units_2010,
+         multi_fam_units_2020,
+         multi_fam_units_2025,
+         multi_fam_units_2035,
+         multi_fam_units_2050,
+         total_jobs_2010,
+         total_jobs_2020,
+         total_jobs_2025,
+         total_jobs_2035,
+         total_jobs_2050) |> 
+  mutate(
+    HH_change_2010_2020 = total_households_2020 - total_households_2010,
+    HH_change_2020_2050 = total_households_2050 - total_households_2020,
+    unit_change_2010_2020 = total_residential_units_2020 - total_residential_units_2010,
+    unit_change_2020_2050 = total_residential_units_2050 - total_residential_units_2020,
+    sf_unit_change_2010_2020 = single_fam_units_2020 - single_fam_units_2010,     
+    sf_unit_change_2020_2050 = single_fam_units_2050 - single_fam_units_2020,
+    mf_unit_change_2010_2020 = multi_fam_units_2020 - multi_fam_units_2010,     
+    mf_unit_change_2020_2050 = multi_fam_units_2050 - multi_fam_units_2020,
+    emp_change_2010_2020 = total_jobs_2020 - total_jobs_2010,     
+    emp_change_2020_2050 = total_jobs_2050 - total_jobs_2020
+         ) |> 
+  right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
+  relocate(muni_id,muni_name,rpa_acr,mpo, .after=block_id)
+
+st_write(s4, dsn = paste0(scen_path,'/Scenario_4_urbansim_block_indicators.gpkg'), layer = 'Scenario_4_block_indicators', append=F)
+
+# st_write(s3, dsn = 'C:/Users/cgate/Desktop/Scenario_4_urbansim_outputs.gpkg', layer = 'Scenario_4_block_indicators', append=F)
+
+
+ns <- names(s4)[8:(ncol(s4)-1)]
+
+s4.bg <- s4[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
+s4.bg.exp <- left_join(blockgroup_sf(2010),s4.bg,by=c('bg10_id'='blockgroup_id'))
+
+st_write(s4.bg.exp, dsn = paste0(scen_path,'/Scenario_4_urbansim_blockgroup_indicators.gpkg'), layer = 'Scenario_4_blockgroup_indicators', append=F)
 ```
 
 

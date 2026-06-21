@@ -1651,7 +1651,9 @@ dev.com23.tract <- st_read(dsn=task_gdb2, layer='nlcd2023_developed_in_commercia
 saveRDS(dev.com23.tract,paste0(sp_path,'nlcd2023_dev_com_tract.rds'))
 
 ```
+
 # 10b - Tract Metrics
+
 ```{r}
 # Merge numerators and calculate metrics
 
