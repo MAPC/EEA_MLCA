@@ -42,6 +42,8 @@ parcel_mb_gpkg <- file.path(data_path, 'Spatial/parcels_with_massbuilds_projects
 massbuilds_gpkg <- file.path(data_path, 'Spatial/all_massbuilds.gpkg')
 task3_gdb = paste0(data_path, '/Task_3/Spatial/LandUse_Efficiency_Metrics.gdb')
 
+task4_gdb = 'C:/Users/cgate/Desktop/EEA_Task_4/EEA_Task_4.gdb'
+
 years=c(2019, 2024, 2029, 2034, 2039, 2049)
 
 # Municipalities
@@ -85,13 +87,13 @@ lun <- function(x){length(unique(x))}
 # Scenario 3 ()
 # scen <- 'Scenario_3'
 # MAPCM_run <- 'run_247'
-# SWM_run <- 's144'
+# SWM_run <- 's148'
 # ctps_run <- paste0(SWM_run,'-',MAPCM_run)
 
 # Scenario 4 ()
 scen <- 'Scenario_4'
 MAPCM_run <- 'run_246'
-SWM_run <- 's145'
+SWM_run <- 's149'
 ctps_run <- paste0(SWM_run,'-',MAPCM_run)
 
 # Conservation Test
@@ -2267,15 +2269,16 @@ s1 <- fread(paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_ful
   right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
   relocate(c(muni_id,muni_name,rpa_acr,mpo),.after=block_id)
 
-st_write(s1, paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_block_indicators.gpkg'), append=F)
+st_write(s1, paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_block_indicators.gpkg'),layer='Scenario_1_block_indicators', append=F)
 
-ns <- names(s1)[4:ncol(s1)]
+ns <- names(s1)[8:ncol(s1)-1]
 setDT(s1)
 s1[,blockgroup_id := substr(block_id, 1, 12)]
 s1.bg <- s1[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s1.bg <- st_as_sf(s1.bg)
+s1.bge <- blockgroup_sf(2010) |> 
+  left_join(s1.bg, by=c('bg10_id'='blockgroup_id'))
 
-st_write(s1.bg, dsn = urbsim_gpkg, layer = 'Scenario_1_blockgroup_indicators', append=F)
+st_write(s1.bge, dsn=paste0(data_path,'/Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_blockgroup_indicators.gpkg'),layer='Scenario_1_blockgroup_indicators', append=F)
 
 ```
 
@@ -2327,17 +2330,19 @@ s2 <- fread(paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_ful
     block_id = as.character(block_id)
          ) |> 
   relocate(scenario) |>
-  right_join(blk10_sf, by=c('block_id'='bl10_id'))
+  right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
+  relocate(c(muni_id,muni_name,rpa_acr,mpo),.after=block_id)
 
-st_write(s2, dsn = urbsim_gpkg, layer = 'Scenario_2_block_indicators', append=F)
+st_write(s2, paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_block_indicators.gpkg'),layer='Scenario_2_block_indicators', append=F)
 
-ns <- names(s2)[4:ncol(s2)]
+ns <- names(s2)[8:ncol(s2)-1]
 setDT(s2)
 s2[,blockgroup_id := substr(block_id, 1, 12)]
 s2.bg <- s2[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s2.bg <- st_as_sf(s2.bg)
+s2.bge <- blockgroup_sf(2010) |> 
+  left_join(s2.bg, by=c('bg10_id'='blockgroup_id'))
 
-st_write(s2.bg, dsn = urbsim_gpkg, layer = 'Scenario_2_blockgroup_indicators', append=F)
+st_write(s2.bge, dsn=paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_blockgroup_indicators.gpkg'),layer='Scenario_2_blockgroup_indicators', append=F)
 
 ```
 
@@ -2403,7 +2408,7 @@ st_write(s3, dsn = paste0(scen_path,'/Scenario_3_urbansim_block_indicators.gpkg'
 ns <- names(s3)[8:(ncol(s3)-1)]
 
 s3.bg <- s3[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s3.bg.exp <- left_join(blockgroup_sf(2010),s3.bg,by=c('bg10_id'='blockgroup_id'))
+s3.bg.exp <- left_join(blockgroup_sf(2010),s3.bg,by=c('bl10_id'='blockgroup_id'))
 
 st_write(s3.bg.exp, dsn = paste0(scen_path,'/Scenario_3_urbansim_blockgroup_indicators.gpkg'), layer = 'Scenario_3_blockgroup_indicators', append=F)
 ```
@@ -2471,12 +2476,12 @@ st_write(s4, dsn = paste0(scen_path,'/Scenario_4_urbansim_block_indicators.gpkg'
 ns <- names(s4)[8:(ncol(s4)-1)]
 
 s4.bg <- s4[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s4.bg.exp <- left_join(blockgroup_sf(2010),s4.bg,by=c('bg10_id'='blockgroup_id'))
+s4.bg.exp <- left_join(blockgroup_sf(2010),s4.bg,by=c('bl10_id'='blockgroup_id'))
 
 st_write(s4.bg.exp, dsn = paste0(scen_path,'/Scenario_4_urbansim_blockgroup_indicators.gpkg'), layer = 'Scenario_4_blockgroup_indicators', append=F)
 ```
 
-
+# Deprecated
 ```{r}
 
 # Add 2000 and 2010 tract level households and employment
@@ -2513,9 +2518,9 @@ cols <- names(m3)[7:16]
 
 blkgrp <- m3[,lapply(.SD,sum),blockgroup2010_geoid,.SDcols=(cols)]
 blkgrp.sf <- blockgroup_sf(2010) |> 
-  left_join(blkgrp, by=c('bg10_id'='blockgroup2010_geoid')) |> 
-  setorder(bg10_id) |> 
-  rename(blockgroup2010_geoid = bg10_id)
+  left_join(blkgrp, by=c('bl10_id'='blockgroup2010_geoid')) |> 
+  setorder(bl10_id) |> 
+  rename(blockgroup2010_geoid = bl10_id)
 
 st_write(blkgrp.sf, dsn = urbsim_gpkg, layer ='urbansim_households_and_employment_by_2010blockgroup_2000_2035', append=F)
 
@@ -2613,9 +2618,9 @@ cs <- names(mpc)[6:60]
 
 bg <- mpc[,lapply(.SD,sum),blockgroup2010_geoid,.SDcols=(cs)]
 bg.sf <- blockgroup_sf(2010) |> 
-  left_join(bg, by=c('bg10_id'='blockgroup2010_geoid')) |> 
-  setorder(bg10_id) |> 
-  rename(blockgroup2010_geoid = bg10_id)
+  left_join(bg, by=c('bl10_id'='blockgroup2010_geoid')) |> 
+  setorder(bl10_id) |> 
+  rename(blockgroup2010_geoid = bl10_id)
 
 st_write(bg.sf, dsn = urbsim_gpkg, layer ='urbansim_employment_by_supersector_2010blockgroup_2000_2035', append=F)
 
@@ -2629,6 +2634,166 @@ ct.sf <- tract_sf(2010) |>
 st_write(ct.sf, dsn = urbsim_gpkg, layer ='urbansim_employment_by_supersector_2010tract_2000_2035', append=F)
 ```
 
+
+# 3.5 - Scenario comparison
+
+```{r}
+
+rpa <- mapcdatakeys::all_muni_data_keys |> select(muni_id,mpo)
+
+s1 <- st_read(file.path(data_path,'Task_4/Scenario_1/UrbanSim_Outputs/Scenario_1_block_indicators.gpkg'), layer = 'Scenario_1_block_indicators') |> 
+  st_drop_geometry() |> 
+  select(block_id,
+         total_households_2020,
+         total_households_2050,
+         total_residential_units_2020,
+         total_residential_units_2050,
+         single_fam_units_2020,
+         single_fam_units_2050,
+         multi_fam_units_2020,
+         multi_fam_units_2050,
+         total_jobs_2020,
+         total_jobs_2050)
+names(s1) <- c('bl10_id',paste0('scen1_',names(s1)[2:ncol(s1)]))
+
+
+s2 <- st_read(file.path(data_path,'Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_block_indicators.gpkg'), layer = 'Scenario_2_block_indicators') |> 
+  st_drop_geometry() |> 
+  select(block_id,
+         total_households_2020,
+         total_households_2050,
+         total_residential_units_2020,
+         total_residential_units_2050,
+         single_fam_units_2020,
+         single_fam_units_2050,
+         multi_fam_units_2020,
+         multi_fam_units_2050,
+         total_jobs_2020,
+         total_jobs_2050)
+names(s2) <- c('bl10_id',paste0('scen2_',names(s2)[2:ncol(s2)]))
+
+s3 <- st_read(file.path(data_path,'Task_4/Scenario_3/UrbanSim_Outputs/Scenario_3_urbansim_block_indicators.gpkg'), layer = 'Scenario_3_block_indicators') |> 
+  st_drop_geometry() |> 
+  select(block_id,
+         total_households_2020,
+         total_households_2050,
+         total_residential_units_2020,
+         total_residential_units_2050,
+         single_fam_units_2020,
+         single_fam_units_2050,
+         multi_fam_units_2020,
+         multi_fam_units_2050,
+         total_jobs_2020,
+         total_jobs_2050)
+names(s3) <- c('bl10_id',paste0('scen3_',names(s3)[2:ncol(s3)]))
+
+s4 <- st_read(file.path(data_path,'Task_4/Scenario_4/UrbanSim_Outputs/Scenario_4_urbansim_block_indicators.gpkg'), layer = 'Scenario_4_block_indicators') |> 
+  st_drop_geometry() |> 
+  select(block_id,
+         total_households_2020,
+         total_households_2050,
+         total_residential_units_2020,
+         total_residential_units_2050,
+         single_fam_units_2020,
+         single_fam_units_2050,
+         multi_fam_units_2020,
+         multi_fam_units_2050,
+         total_jobs_2020,
+         total_jobs_2050)
+names(s4) <- c('bl10_id',paste0('scen4_',names(s4)[2:ncol(s4)]))
+
+
+
+ms <- geog_xw_2010 |> 
+  select(bl10_id,muni_id,muni_name) |> 
+  unique() |> 
+  left_join(rpa, by='muni_id') |> 
+  mutate(bl10_id = as.character(bl10_id))
+
+comp <- block_sf(2010) |> 
+  mutate(bl10_id = as.character(bl10_id)) |> 
+  select(bl10_id,geometry) |> 
+  left_join(ms, by='bl10_id') |> 
+  left_join(s1, by='bl10_id') |> 
+  left_join(s2, by='bl10_id') |> 
+  left_join(s3, by='bl10_id') |> 
+  left_join(s4, by='bl10_id') |> 
+  mutate(
+    household_growth_scen1 = scen1_total_households_2050 - scen1_total_households_2020, 
+    household_growth_scen2 = scen2_total_households_2050 - scen2_total_households_2020,
+    household_growth_scen3 = scen3_total_households_2050 - scen3_total_households_2020,
+    household_growth_scen4 = scen4_total_households_2050 - scen4_total_households_2020,
+    households_diff_2050_s2_s1 = scen2_total_households_2050 - scen1_total_households_2050,
+    households_diff_2050_s3_s2 = scen3_total_households_2050 - scen2_total_households_2050,
+    households_diff_2050_s4_s2 = scen4_total_households_2050 - scen2_total_households_2050,
+    chg_households_diff_s2_s1 = (scen2_total_households_2050-scen2_total_households_2020) - (scen1_total_households_2050-scen1_total_households_2020),
+    chg_households_diff_s3_s2 = (scen3_total_households_2050-scen3_total_households_2020) - (scen2_total_households_2050-scen2_total_households_2020),
+    chg_households_diff_s4_s2 = (scen4_total_households_2050-scen4_total_households_2020) - (scen2_total_households_2050-scen2_total_households_2020),
+    unit_growth_scen1 = scen1_total_residential_units_2050 - scen1_total_residential_units_2020, 
+    unit_growth_scen2 = scen2_total_residential_units_2050 - scen2_total_residential_units_2020,
+    unit_growth_scen3 = scen3_total_residential_units_2050 - scen3_total_residential_units_2020,
+    unit_growth_scen4 = scen4_total_residential_units_2050 - scen4_total_residential_units_2020,
+    unit_diff_2050_s2_s1 = scen2_total_residential_units_2050 - scen1_total_residential_units_2050,
+    unit_diff_2050_s3_s2 = scen3_total_residential_units_2050 - scen2_total_residential_units_2050,
+    unit_diff_2050_s4_s2 = scen4_total_residential_units_2050 - scen2_total_residential_units_2050,
+    chg_unit_diff_s2_s1 = (scen2_total_residential_units_2050-scen2_total_residential_units_2020) - (scen1_total_residential_units_2050-scen1_total_residential_units_2020),
+    chg_unit_diff_s3_s2 = (scen3_total_residential_units_2050-scen3_total_residential_units_2020) - (scen2_total_residential_units_2050-scen2_total_residential_units_2020),
+    chg_unit_diff_s4_s2 = (scen4_total_residential_units_2050-scen4_total_residential_units_2020) - (scen2_total_residential_units_2050-scen2_total_residential_units_2020),
+    SF_unit_diff_2050_s2_s1 = scen2_single_fam_units_2050 - scen1_single_fam_units_2050,
+    SF_unit_diff_2050_s3_s2 = scen3_single_fam_units_2050 - scen2_single_fam_units_2050,
+    SF_unit_diff_2050_s4_s2 = scen4_single_fam_units_2050 - scen2_single_fam_units_2050,
+    chg_SF_unit_diff_s2_s1 = (scen2_single_fam_units_2050-scen2_single_fam_units_2020) - (scen1_single_fam_units_2050-scen1_single_fam_units_2020),
+    chg_SF_unit_diff_s3_s2 = (scen3_single_fam_units_2050-scen3_single_fam_units_2020) - (scen2_single_fam_units_2050-scen2_single_fam_units_2020),
+    chg_SF_unit_diff_s4_s2 = (scen4_single_fam_units_2050-scen4_single_fam_units_2020) - (scen2_single_fam_units_2050-scen2_single_fam_units_2020),
+    MF_unit_diff_2050_s2_s1 = scen2_multi_fam_units_2050 - scen1_multi_fam_units_2050,
+    MF_unit_diff_2050_s3_s2 = scen3_multi_fam_units_2050 - scen2_multi_fam_units_2050,
+    MF_unit_diff_2050_s4_s2 = scen4_multi_fam_units_2050 - scen2_multi_fam_units_2050,
+    chg_MF_unit_diff_s2_s1 = (scen2_multi_fam_units_2050-scen2_multi_fam_units_2020) - (scen1_multi_fam_units_2050-scen1_multi_fam_units_2020),
+    chg_MF_unit_diff_s3_s2 = (scen3_multi_fam_units_2050-scen3_multi_fam_units_2020) - (scen2_multi_fam_units_2050-scen2_multi_fam_units_2020),
+    chg_MF_unit_diff_s4_s2 = (scen4_multi_fam_units_2050-scen4_multi_fam_units_2020) - (scen2_multi_fam_units_2050-scen2_multi_fam_units_2020)
+  )
+
+st_write(comp, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_block', append=F)
+
+cs <- names(comp)[6:ncol(comp)]
+
+comp.bg <- comp |> 
+  mutate(bg10_id = substr(bl10_id,1,12)) |> 
+  setDT() |> 
+  _[,lapply(.SD,sum),.(bg10_id),.SDcols=(cs)]
+
+bg <- blockgroup_sf(2010) |> 
+  mutate(bg10_id = as.character(bg10_id)) |> 
+  left_join(comp.bg,by='bg10_id')
+
+st_write(bg, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_blockgroup', append=F)
+
+# Tract
+comp.ct <- comp |> 
+  mutate(ct10_id = substr(bl10_id,1,11)) |> 
+  setDT() |> 
+  _[,lapply(.SD,sum),.(ct10_id),.SDcols=(cs)]
+
+ct <- tract_sf(2010) |> 
+  mutate(ct10_id = as.character(ct10_id)) |> 
+  left_join(comp.ct, by='ct10_id')
+
+st_write(ct, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_tract', append=F)
+
+cmt <- mapcdatakeys::all_muni_data_keys |> 
+  select(muni_id,cmsbt08)
+
+mun <- comp |> 
+  left_join(cmt, by='muni_id') |> 
+  setDT() |> 
+  _[,lapply(.SD,sum),.(muni_id,muni_name,mpo,cmsbt08),.SDcols=(cs)]
+
+msf <- muni_sf(2020) |> 
+  select(muni_id,geometry) |> 
+  left_join(mun, by='muni_id')
+
+st_write(msf, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_muni', append=F)
+```
 
 
 # 4 - Census-based Land Use Efficiency Metrics
@@ -2885,7 +3050,7 @@ cx <- blk_2010 |>
 cx[is.na(cx)] <- 0
 
 dx <- cx |> 
-  mutate(bg10_id = substr(bl10_id,1,12),
+  mutate(bl10_id = substr(bl10_id,1,12),
          ct10_id = substr(bl10_id,1,11),
          dev_acres = block_developable_area_m2 * 0.000247105,
          unit_acre_2000 = total_units_2000 / dev_acres,
@@ -2909,7 +3074,7 @@ dx <- cx |>
          )
 
 bgx <- dx |> 
-  group_by(bg10_id) |> 
+  group_by(bl10_id) |> 
   summarize(total_units_2000 = sum(total_units_2000),
             total_units_2010 = sum(total_units_2010),
             total_units_2020 = sum(total_units_2020),

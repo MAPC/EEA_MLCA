@@ -6,7 +6,7 @@ import h5py
 # set working directory
 
 #Most recent MAPC Model run
-run = 'state_run_144'
+run = 'state_run_149'
 
 #Most recent SWM run
 #run = 's102'

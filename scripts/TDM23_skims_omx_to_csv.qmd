@@ -47,14 +47,6 @@ skim2_path <- file.path(data_path,scen2,'Inputs/Skims')
 skim3_path <- file.path(data_path,scen3,'Inputs/Skims')
 skim4_path <- file.path(data_path,scen4,'Inputs/Skims')
 
-
-# skim3_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_3'
-# skim4_path <- 'C:/Users/cgate/Desktop/Skims/Scenario_4'
-# 
-# skim_path <- file.path('C:/Users/cgate/Desktop/Skims',scen)
-
-# dir.create(skim_path, showWarnings = F)
-
 knitr::opts_knit$set(root.dir = data_path)
 
 ```
@@ -152,8 +144,7 @@ dx <- readRDS(paste0(skim_path,'/TDM23_TAZ_OD_Pairs.rds'))
 
 zid <- fread(paste0(skim_path,'/swm_zone_ids.csv'))
 
-# for (yr in c(base_prefix, plan_prefix)) {
-for (yr in c(base_prefix)) {    
+for (yr in c(base_prefix, plan_prefix)) {
   
     # SOV / Passenger vehicle
     hwy <- fread(file.path(skim_path, yr, 'hwy_am.csv'))
@@ -221,7 +212,6 @@ zid <- fread(paste0(skim3_path,'/swm_zone_ids.csv'))
 
 
 for (yr in c(int_prefix, plan_prefix)) {
-# for (yr in c(plan_prefix)) {    
   
     # SOV / Passenger vehicle
     hwy <- fread(file.path(skim3_path, yr, 'hwy_am.csv'))
@@ -318,7 +308,6 @@ cong.taz <- fread(paste0(skim4_path, '/congestion_zone_taz.csv')) |> pull(tazID)
 
 
 for (yr in c(int_prefix, plan_prefix)) {
-#for (yr in c(plan_prefix)) {    
   
     # SOV / Passenger vehicle
     hwy <- fread(file.path(skim4_path, yr, 'hwy_am.csv'))
@@ -327,8 +316,6 @@ for (yr in c(int_prefix, plan_prefix)) {
     hwy[, sov_am_totcost := da_time / 60 * 18.50 + da_toll + vmt_fee]
     hwy <- hwy[, .(from_zone_id, to_zone_id, sov_am_totcost)]
     setkey(hwy, from_zone_id, to_zone_id)
-    
-    # Walk-access transit
   
     # Walk-access transit
     wat <- fread(file.path(skim3_path, yr, 'tw_am.csv')) |> 
@@ -401,7 +388,7 @@ for (yr in c(int_prefix, plan_prefix)) {
 
 ```{r}
 
-yr=int_prefix
+yr <- int_prefix
 
 m2 <- fread(file.path(skim2_path,yr,
            paste0('mapcm_skims_', yr, '.csv')))
@@ -416,13 +403,12 @@ m4 <- fread(file.path(skim4_path,yr,
 names(m4)[3:5] <-  paste0(names(m4)[3:5],'_scen4')
 
 comp <- left_join(m2, m4, by=c('from_zone_id','to_zone_id')) |> 
-  # left_join(m4, by=c('from_zone_id','to_zone_id')) |> 
   mutate(
-    # sov_diff_23 = sov_am_totcost_scen3 - sov_am_totcost_scen2,
+    sov_diff_23 = sov_am_totcost_scen3 - sov_am_totcost_scen2,
          sov_diff_32 = sov_am_totcost_scen4 - sov_am_totcost_scen2,
-         # wat_diff_23 = wat_am_totcost_scen3 - wat_am_totcost_scen2,
+         wat_diff_23 = wat_am_totcost_scen3 - wat_am_totcost_scen2,
          wat_diff_32 = wat_am_totcost_scen4 - wat_am_totcost_scen2,
-         # dat_diff_23 = dat_am_totcost_scen3 - dat_am_totcost_scen2,
+         dat_diff_23 = dat_am_totcost_scen3 - dat_am_totcost_scen2,
          dat_diff_32 = dat_am_totcost_scen4 - dat_am_totcost_scen2)
 
 sov.diff <- comp |> 
