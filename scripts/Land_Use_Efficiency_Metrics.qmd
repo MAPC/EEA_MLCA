@@ -264,8 +264,6 @@ setnames(acs14.muni, c(names(acs14.muni)[1:4],paste0(names(acs14.muni)[5:12],'_2
 
 ```{r}
 
-# ct_xw <- fread(paste0(data_path, '/nhgis_bg2020_tr2010_25.csv')) |>
-#   mutate(bg2020ge = as.character(bg2020ge))
 
 vars23 <- load_variables('acs5', year = 2023) |>
   setDT()
@@ -739,6 +737,8 @@ saveRDS(dev23_mpo, paste0(sp_path, 'nlcd2023_dev_area_mpo.rds'))
 
 ```{r}
 
+alist <- fread(paste0(sp_path,'parcel_vintage_years_by_muni.csv'))
+
 msf <- mapcdatakeys::muni_sf(2020) |> 
   select(muni_name,geometry)
 
@@ -859,98 +859,98 @@ m14 <- rbind(m14,m20,m16) %>%
 st_write(m14, dsn = delta_gdb, layer = 'parcels_combine_2014', append=F)
 
 # Missing data somehow
-m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014')
-ns <- names(m14)
-
-p306 <- st_read(dsn = comp_gdb, layer = 'M306_parcel_2012_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2012,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Wales',
-         YEAR=2012,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p20 <- st_read(dsn = comp_gdb, layer = 'M020_parcel_2011_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2011,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Barnstable',
-         YEAR=2011,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p181 <- st_read(dsn = comp_gdb, layer = 'M181_parcel_2011_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2011,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Methuen',
-         YEAR=2011,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p38 <- st_read(dsn = comp_gdb, layer = 'M038_parcel_2012_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2012,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Boxford',
-         YEAR=2012,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p144 <- st_read(dsn = comp_gdb, layer = 'M144_parcel_2013_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2013,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Ipswich',
-         YEAR=2013,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p215 <- st_read(dsn = comp_gdb, layer = 'M215_parcel_2011_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2011,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Northborough',
-         YEAR=2011,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p49 <- st_read(dsn = comp_gdb, layer = 'M049_parcel_2012_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2012,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Cambridge',
-         YEAR=2012,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p258 <- st_read(dsn = comp_gdb, layer = 'M258_parcel_2011_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2011,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Salem',
-         YEAR=2011,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p201 <- st_read(dsn = comp_gdb, layer = 'M201_parcel_2012_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2012,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='New Bedford',
-         YEAR=2012,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-p153 <- st_read(dsn = comp_gdb, layer = 'M153_parcel_2013_with_assess_data') |> 
-  rename(LOC_ID=LOC_ID_2013,
-         LOT_SQFT = LOT_SIZE_G) |> 
-  mutate(CITY='Leominster',
-         YEAR=2013,
-         SUMYEAR=2014) |> 
-  select(ns)
-
-m14m <- m14 |> 
-  filter(!CITY %in% c('Wales','Barnstable','Methuen','Boxford','Ipswich','Northborough','Cambridge','Salem','New Bedford','Leominster')) |> 
-  rbind(p306,p20,p181,p38,p144,p215,p49,p258,p201,p153)
-
-st_write(m14m, dsn = delta_gdb, layer = 'parcels_combine_2014_fixed', append=F)
+# m14 <- st_read(dsn = delta_gdb, layer = 'parcels_combine_2014')
+# ns <- names(m14)
+# 
+# p306 <- st_read(dsn = comp_gdb, layer = 'M306_parcel_2012_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2012,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Wales',
+#          YEAR=2012,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p20 <- st_read(dsn = comp_gdb, layer = 'M020_parcel_2011_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2011,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Barnstable',
+#          YEAR=2011,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p181 <- st_read(dsn = comp_gdb, layer = 'M181_parcel_2011_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2011,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Methuen',
+#          YEAR=2011,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p38 <- st_read(dsn = comp_gdb, layer = 'M038_parcel_2012_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2012,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Boxford',
+#          YEAR=2012,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p144 <- st_read(dsn = comp_gdb, layer = 'M144_parcel_2013_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2013,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Ipswich',
+#          YEAR=2013,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p215 <- st_read(dsn = comp_gdb, layer = 'M215_parcel_2011_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2011,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Northborough',
+#          YEAR=2011,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p49 <- st_read(dsn = comp_gdb, layer = 'M049_parcel_2012_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2012,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Cambridge',
+#          YEAR=2012,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p258 <- st_read(dsn = comp_gdb, layer = 'M258_parcel_2011_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2011,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Salem',
+#          YEAR=2011,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p201 <- st_read(dsn = comp_gdb, layer = 'M201_parcel_2012_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2012,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='New Bedford',
+#          YEAR=2012,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# p153 <- st_read(dsn = comp_gdb, layer = 'M153_parcel_2013_with_assess_data') |> 
+#   rename(LOC_ID=LOC_ID_2013,
+#          LOT_SQFT = LOT_SIZE_G) |> 
+#   mutate(CITY='Leominster',
+#          YEAR=2013,
+#          SUMYEAR=2014) |> 
+#   select(ns)
+# 
+# m14m <- m14 |> 
+#   filter(!CITY %in% c('Wales','Barnstable','Methuen','Boxford','Ipswich','Northborough','Cambridge','Salem','New Bedford','Leominster')) |> 
+#   rbind(p306,p20,p181,p38,p144,p215,p49,p258,p201,p153)
+# 
+# st_write(m14m, dsn = delta_gdb, layer = 'parcels_combine_2014_fixed', append=F)
 
 # Missing 2014: Wales 306, Barnstable 20, Methuen 181, Boxford 38, Ipswich 144, Northborough 215, Cambridge 49, Salem 258, New Bedford 201, Leominster 153
 
-alist <- fread('C:/Users/CGately/Desktop/Git_repos/parcels-processing/PDB_Update_2023/parcel_vintage_years_by_muni.csv')
+
 
 ```
 

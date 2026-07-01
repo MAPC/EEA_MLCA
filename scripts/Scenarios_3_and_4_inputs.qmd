@@ -289,6 +289,13 @@ fwrite(
   )
 )
 
+res.sim.sf <- block_sf(2010) |> 
+  right_join(res.sim,by=c('bl10_id'='block_id'))
+st_write(res.sim.sf, dsn=scen3_gdb, layer = 'Scenario_3_4_simulated_residential_developments', append=F)
+
+com.sim.sf <- block_sf(2010) |> 
+  right_join(com.sim,by=c('bl10_id'='block_id'))
+st_write(com.sim.sf, dsn=scen3_gdb, layer = 'Scenario_3_4_simulated_commercial_developments', append=F)
 
 ```
 
