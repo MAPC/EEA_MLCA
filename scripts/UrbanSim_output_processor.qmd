@@ -1987,6 +1987,7 @@ for (j in seq_len(ncol(m4))) {
 
 fwrite(m4,paste0(scen_path,'/',scen,'_full_indicators_block.csv'))
 
+
 m5 <- m4 |>
   select(-dev_pct) |> 
   relocate(c(block_acres,developable_acres),.after=mpo)
@@ -2350,57 +2351,81 @@ st_write(s2.bge, dsn=paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scena
 ```{r}
 # Scenario 3
 
-s3 <- fread(paste0(data_path,'/Task_4/Scenario_3/UrbanSim_Outputs/',scen,'_full_indicators_block.csv')) |> 
-  mutate(scenario = 'Scenario_3',
-         block_id = as.character(block_id),
-         blockgroup_id = substr(block_id, 1, 12)
-         )|> 
-  select(scenario,
-         block_id,
-         blockgroup_id,
-         block_acres,
-         developable_acres,
-         total_households_2010,
-         total_households_2020,
-         total_households_2025,
-         total_households_2035,
-         total_households_2050,
-         total_residential_units_2010,
-         total_residential_units_2020,
-         total_residential_units_2025,
-         total_residential_units_2035,
-         total_residential_units_2050,
-         single_fam_units_2010,
-         single_fam_units_2020,
-         single_fam_units_2025,
-         single_fam_units_2035,
-         single_fam_units_2050,
-         multi_fam_units_2010,
-         multi_fam_units_2020,
-         multi_fam_units_2025,
-         multi_fam_units_2035,
-         multi_fam_units_2050,
-         total_jobs_2010,
-         total_jobs_2020,
-         total_jobs_2025,
-         total_jobs_2035,
-         total_jobs_2050) |> 
+res.sim <- fread(paste0(data_path,'/Task_4/Scenario_3/Inputs/swm_residential_development_simulated_EEA_Scenario_3_and_4.csv')) |> 
+  select(block_id, residential_units)
+
+s3 <- fread(
+  paste0(
+    data_path,
+    '/Task_4/Scenario_3/UrbanSim_Outputs/Scenario_3_full_indicators_block.csv'
+  )
+) |>
+  # left_join(res.sim, by = 'block_id') |>
+  # _[!is.na(residential_units), `:=`(
+  #   single_fam_units_2035 = single_fam_units_2035 - residential_units,
+  #   multi_fam_units_2035 = multi_fam_units_2035 + residential_units,
+  #   single_fam_units_2050 = single_fam_units_2050 - residential_units,
+  #   multi_fam_units_2050 = multi_fam_units_2050 + residential_units
+  # )] |>
+  # select(-residential_units) |> 
+  mutate(
+    scenario = 'Scenario_3',
+    block_id = as.character(block_id),
+    blockgroup_id = substr(block_id, 1, 12)
+  ) |>
+  select(
+    scenario,
+    block_id,
+    blockgroup_id,
+    block_acres,
+    developable_acres,
+    total_households_2010,
+    total_households_2020,
+    total_households_2025,
+    total_households_2035,
+    total_households_2050,
+    total_residential_units_2010,
+    total_residential_units_2020,
+    total_residential_units_2025,
+    total_residential_units_2035,
+    total_residential_units_2050,
+    single_fam_units_2010,
+    single_fam_units_2020,
+    single_fam_units_2025,
+    single_fam_units_2035,
+    single_fam_units_2050,
+    multi_fam_units_2010,
+    multi_fam_units_2020,
+    multi_fam_units_2025,
+    multi_fam_units_2035,
+    multi_fam_units_2050,
+    total_jobs_2010,
+    total_jobs_2020,
+    total_jobs_2025,
+    total_jobs_2035,
+    total_jobs_2050
+  ) |>
   mutate(
     HH_change_2010_2020 = total_households_2020 - total_households_2010,
     HH_change_2020_2050 = total_households_2050 - total_households_2020,
     unit_change_2010_2020 = total_residential_units_2020 - total_residential_units_2010,
     unit_change_2020_2050 = total_residential_units_2050 - total_residential_units_2020,
-    sf_unit_change_2010_2020 = single_fam_units_2020 - single_fam_units_2010,     
+    sf_unit_change_2010_2020 = single_fam_units_2020 - single_fam_units_2010,
     sf_unit_change_2020_2050 = single_fam_units_2050 - single_fam_units_2020,
-    mf_unit_change_2010_2020 = multi_fam_units_2020 - multi_fam_units_2010,     
+    mf_unit_change_2010_2020 = multi_fam_units_2020 - multi_fam_units_2010,
     mf_unit_change_2020_2050 = multi_fam_units_2050 - multi_fam_units_2020,
-    emp_change_2010_2020 = total_jobs_2020 - total_jobs_2010,     
+    emp_change_2010_2020 = total_jobs_2020 - total_jobs_2010,
     emp_change_2020_2050 = total_jobs_2050 - total_jobs_2020
-         ) |> 
-  right_join(blk10_sf, by=c('block_id'='bl10_id')) |> 
-  relocate(muni_id,muni_name,rpa_acr,mpo, .after=block_id)
+  ) |>
+  right_join(blk10_sf, by = c('block_id' = 'bl10_id')) |>
+  relocate(muni_id, muni_name, rpa_acr, mpo, .after = block_id)
 
-st_write(s3, dsn = paste0(scen_path,'/Scenario_3_urbansim_block_indicators.gpkg'), layer = 'Scenario_3_block_indicators', append=F)
+st_write(
+  s3,
+  dsn = paste0(scen_path, '/Scenario_3_urbansim_block_indicators.gpkg'),
+  layer = 'Scenario_3_block_indicators',
+  append = F
+)
 
 # st_write(s3, dsn = 'C:/Users/cgate/Desktop/Scenario_3_urbansim_outputs.gpkg', layer = 'Scenario_3_block_indicators', append=F)
 
@@ -2408,17 +2433,29 @@ st_write(s3, dsn = paste0(scen_path,'/Scenario_3_urbansim_block_indicators.gpkg'
 ns <- names(s3)[8:(ncol(s3)-1)]
 
 s3.bg <- s3[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s3.bg.exp <- left_join(blockgroup_sf(2010),s3.bg,by=c('bl10_id'='blockgroup_id'))
+s3.bg.exp <- left_join(blockgroup_sf(2010),s3.bg,by=c('bg10_id'='blockgroup_id'))
 
 st_write(s3.bg.exp, dsn = paste0(scen_path,'/Scenario_3_urbansim_blockgroup_indicators.gpkg'), layer = 'Scenario_3_blockgroup_indicators', append=F)
+
 ```
 
 # 3.4 - Scenario 4 outputs For HF LULC Change Analysis
 ```{r}
 
+res.sim <- fread(paste0(data_path,'/Task_4/Scenario_3/Inputs/swm_residential_development_simulated_EEA_Scenario_3_and_4.csv')) |> 
+  select(block_id, residential_units)
+
 # Scenario 4
 
-s4 <- fread(paste0(data_path,'/Task_4/Scenario_4/UrbanSim_Outputs/',scen,'_full_indicators_block.csv')) |> 
+s4 <- fread(paste0(data_path,'/Task_4/Scenario_4/UrbanSim_Outputs/Scenario_4_full_indicators_block.csv')) |> 
+  # left_join(res.sim, by = 'block_id') |>
+  # _[!is.na(residential_units), `:=`(
+  #   single_fam_units_2035 = single_fam_units_2035 - residential_units,
+  #   multi_fam_units_2035 = multi_fam_units_2035 + residential_units,
+  #   single_fam_units_2050 = single_fam_units_2050 - residential_units,
+  #   multi_fam_units_2050 = multi_fam_units_2050 + residential_units
+  # )] |>
+  # select(-residential_units) |> 
   mutate(scenario = 'Scenario_4',
          block_id = as.character(block_id),
          blockgroup_id = substr(block_id, 1, 12)
@@ -2476,7 +2513,7 @@ st_write(s4, dsn = paste0(scen_path,'/Scenario_4_urbansim_block_indicators.gpkg'
 ns <- names(s4)[8:(ncol(s4)-1)]
 
 s4.bg <- s4[,lapply(.SD,sum),blockgroup_id,.SDcols=(ns)] 
-s4.bg.exp <- left_join(blockgroup_sf(2010),s4.bg,by=c('bl10_id'='blockgroup_id'))
+s4.bg.exp <- left_join(blockgroup_sf(2010),s4.bg,by=c('bg10_id'='blockgroup_id'))
 
 st_write(s4.bg.exp, dsn = paste0(scen_path,'/Scenario_4_urbansim_blockgroup_indicators.gpkg'), layer = 'Scenario_4_blockgroup_indicators', append=F)
 ```
@@ -2522,7 +2559,12 @@ s2 <- fread(paste0(data_path,'/Task_4/Scenario_2/UrbanSim_Outputs/Scenario_2_ful
   mutate(block_id = as.character(block_id))
 names(s2) <- c('bl10_id',paste0('scen2_',names(s2)[2:ncol(s2)]))
 
-s3 <- fread(paste0(data_path,'/Task_4/Scenario_3/UrbanSim_Outputs/Scenario_3_full_indicators_block.csv')) |> 
+res.sim <- fread(paste0(data_path,'/Task_4/Scenario_3/Inputs/swm_residential_development_simulated_EEA_Scenario_3_and_4.csv')) |> 
+  select(block_id, residential_units)
+
+s3 <- fread(paste0(data_path,'/Task_4/Scenario_3/UrbanSim_Outputs/Scenario_3_full_indicators_block.csv')) |>
+  # left_join(res.sim, by='block_id') |> 
+  # _[!is.na(residential_units),`:=`(single_fam_units_2050 = single_fam_units_2050 - residential_units, multi_fam_units_2050 = multi_fam_units_2050 + residential_units)] |> 
   select(block_id,
          total_households_2020,
          total_households_2050,
@@ -2538,6 +2580,8 @@ s3 <- fread(paste0(data_path,'/Task_4/Scenario_3/UrbanSim_Outputs/Scenario_3_ful
 names(s3) <- c('bl10_id',paste0('scen3_',names(s3)[2:ncol(s3)]))
 
 s4 <- fread(paste0(data_path,'/Task_4/Scenario_4/UrbanSim_Outputs/Scenario_4_full_indicators_block.csv')) |> 
+  # left_join(res.sim, by='block_id') |> 
+  # _[!is.na(residential_units),`:=`(single_fam_units_2050 = single_fam_units_2050 - residential_units, multi_fam_units_2050 = multi_fam_units_2050 + residential_units)] |> 
   select(block_id,
          total_households_2020,
          total_households_2050,
@@ -2595,6 +2639,18 @@ comp <- block_sf(2010) |>
     household_growth_diff_s4_s1 = household_growth_scen4 - household_growth_scen1,
     household_growth_diff_s3_s2 = household_growth_scen3 - household_growth_scen2,
     household_growth_diff_s4_s2 = household_growth_scen4 - household_growth_scen2,
+    unit2020_per_acre_scen1 = scen1_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen2 = scen2_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen3 = scen3_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen4 = scen4_total_residential_units_2020 / developable_acres,
+    unit2050_per_acre_scen1 = scen1_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen2 = scen2_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen3 = scen3_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen4 = scen4_total_residential_units_2050 / developable_acres,
+    chg_unit_per_acre_scen1 = unit2050_per_acre_scen1 - unit2020_per_acre_scen1,
+    chg_unit_per_acre_scen2 = unit2050_per_acre_scen2 - unit2020_per_acre_scen2,
+    chg_unit_per_acre_scen3 = unit2050_per_acre_scen3 - unit2020_per_acre_scen3,
+    chg_unit_per_acre_scen4 = unit2050_per_acre_scen4 - unit2020_per_acre_scen4,
     unit_growth_scen1 = scen1_total_residential_units_2050 - scen1_total_residential_units_2020, 
     unit_growth_scen2 = scen2_total_residential_units_2050 - scen2_total_residential_units_2020,
     unit_growth_scen3 = scen3_total_residential_units_2050 - scen3_total_residential_units_2020,
@@ -2636,7 +2692,11 @@ comp <- block_sf(2010) |>
     MF_unit_growth_diff_s3_s1 = MF_unit_growth_scen3 - MF_unit_growth_scen1,
     MF_unit_growth_diff_s4_s1 = MF_unit_growth_scen4 - MF_unit_growth_scen1,
     MF_unit_growth_diff_s3_s2 = MF_unit_growth_scen3 - MF_unit_growth_scen2,
-    MF_unit_growth_diff_s4_s2 = MF_unit_growth_scen4 - MF_unit_growth_scen2
+    MF_unit_growth_diff_s4_s2 = MF_unit_growth_scen4 - MF_unit_growth_scen2,
+    chg_jobs_scen1 = scen1_total_jobs_2050 - scen1_total_jobs_2020,
+    chg_jobs_scen2 = scen2_total_jobs_2050 - scen2_total_jobs_2020,
+    chg_jobs_scen3 = scen3_total_jobs_2050 - scen3_total_jobs_2020,
+    chg_jobs_scen4 = scen4_total_jobs_2050 - scen4_total_jobs_2020
   )
 
 st_write(comp, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_block', append=F)
@@ -2646,19 +2706,45 @@ cs <- names(comp)[7:ncol(comp)]
 mc <- st_read(dsn = task4_gdb, layer = 'MassGIS_Munis_Coastal_Clip') |> 
   st_union()
 
-# comp.bg <- comp |> 
-#   mutate(bg10_id = substr(bl10_id,1,12)) |> 
-#   setDT() |> 
-#   _[,lapply(.SD,sum),.(bg10_id),.SDcols=(cs)]
-# 
-# bg <- blockgroup_sf(2010) |> 
-#   st_intersection(mc) |> 
-#   st_make_valid() |> 
-#   st_cast('MULTIPOLYGON') |> 
-#   mutate(bg10_id = as.character(bg10_id)) |> 
-#   left_join(comp.bg,by='bg10_id')
-# 
-# st_write(bg, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_blockgroup', append=F)
+comp.bg <- comp |>
+  mutate(bg10_id = substr(bl10_id,1,12)) |>
+  setDT() |>
+  _[,lapply(.SD,sum),.(bg10_id),.SDcols=(cs)] |> 
+  mutate(
+    hh2020_per_acre_scen1 = scen1_total_households_2020 / developable_acres,
+    hh2020_per_acre_scen2 = scen2_total_households_2020 / developable_acres,
+    hh2020_per_acre_scen3 = scen3_total_households_2020 / developable_acres,
+    hh2020_per_acre_scen4 = scen4_total_households_2020 / developable_acres,
+    hh2050_per_acre_scen1 = scen1_total_households_2050 / developable_acres,
+    hh2050_per_acre_scen2 = scen2_total_households_2050 / developable_acres,
+    hh2050_per_acre_scen3 = scen3_total_households_2050 / developable_acres,
+    hh2050_per_acre_scen4 = scen4_total_households_2050 / developable_acres,
+    chg_hh_per_acre_scen1 = hh2050_per_acre_scen1 - hh2020_per_acre_scen1,
+    chg_hh_per_acre_scen2 = hh2050_per_acre_scen2 - hh2020_per_acre_scen2,
+    chg_hh_per_acre_scen3 = hh2050_per_acre_scen3 - hh2020_per_acre_scen3,
+    chg_hh_per_acre_scen4 = hh2050_per_acre_scen4 - hh2020_per_acre_scen4,
+    unit2020_per_acre_scen1 = scen1_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen2 = scen2_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen3 = scen3_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen4 = scen4_total_residential_units_2020 / developable_acres,
+    unit2050_per_acre_scen1 = scen1_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen2 = scen2_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen3 = scen3_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen4 = scen4_total_residential_units_2050 / developable_acres,
+    chg_unit_per_acre_scen1 = unit2050_per_acre_scen1 - unit2020_per_acre_scen1,
+    chg_unit_per_acre_scen2 = unit2050_per_acre_scen2 - unit2020_per_acre_scen2,
+    chg_unit_per_acre_scen3 = unit2050_per_acre_scen3 - unit2020_per_acre_scen3,
+    chg_unit_per_acre_scen4 = unit2050_per_acre_scen4 - unit2020_per_acre_scen4
+  )
+
+bg <- blockgroup_sf(2010) |>
+  st_intersection(mc) |>
+  st_make_valid() |>
+  st_cast('MULTIPOLYGON') |>
+  mutate(bg10_id = as.character(bg10_id)) |>
+  left_join(comp.bg,by='bg10_id')
+
+st_write(bg, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_blockgroup', append=F)
 
 # Tract
 comp.ct <- comp |> 
@@ -2677,7 +2763,19 @@ comp.ct <- comp |>
     chg_hh_per_acre_scen1 = hh2050_per_acre_scen1 - hh2020_per_acre_scen1,
     chg_hh_per_acre_scen2 = hh2050_per_acre_scen2 - hh2020_per_acre_scen2,
     chg_hh_per_acre_scen3 = hh2050_per_acre_scen3 - hh2020_per_acre_scen3,
-    chg_hh_per_acre_scen4 = hh2050_per_acre_scen4 - hh2020_per_acre_scen4
+    chg_hh_per_acre_scen4 = hh2050_per_acre_scen4 - hh2020_per_acre_scen4,
+    unit2020_per_acre_scen1 = scen1_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen2 = scen2_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen3 = scen3_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen4 = scen4_total_residential_units_2020 / developable_acres,
+    unit2050_per_acre_scen1 = scen1_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen2 = scen2_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen3 = scen3_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen4 = scen4_total_residential_units_2050 / developable_acres,
+    chg_unit_per_acre_scen1 = unit2050_per_acre_scen1 - unit2020_per_acre_scen1,
+    chg_unit_per_acre_scen2 = unit2050_per_acre_scen2 - unit2020_per_acre_scen2,
+    chg_unit_per_acre_scen3 = unit2050_per_acre_scen3 - unit2020_per_acre_scen3,
+    chg_unit_per_acre_scen4 = unit2050_per_acre_scen4 - unit2020_per_acre_scen4
   )
 
 ct <- tract_sf(2010) |> 
@@ -2714,7 +2812,19 @@ mun <- comp |>
     chg_hh_per_acre_scen1 = hh2050_per_acre_scen1 - hh2020_per_acre_scen1,
     chg_hh_per_acre_scen2 = hh2050_per_acre_scen2 - hh2020_per_acre_scen2,
     chg_hh_per_acre_scen3 = hh2050_per_acre_scen3 - hh2020_per_acre_scen3,
-    chg_hh_per_acre_scen4 = hh2050_per_acre_scen4 - hh2020_per_acre_scen4
+    chg_hh_per_acre_scen4 = hh2050_per_acre_scen4 - hh2020_per_acre_scen4,
+    unit2020_per_acre_scen1 = scen1_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen2 = scen2_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen3 = scen3_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen4 = scen4_total_residential_units_2020 / developable_acres,
+    unit2050_per_acre_scen1 = scen1_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen2 = scen2_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen3 = scen3_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen4 = scen4_total_residential_units_2050 / developable_acres,
+    chg_unit_per_acre_scen1 = unit2050_per_acre_scen1 - unit2020_per_acre_scen1,
+    chg_unit_per_acre_scen2 = unit2050_per_acre_scen2 - unit2020_per_acre_scen2,
+    chg_unit_per_acre_scen3 = unit2050_per_acre_scen3 - unit2020_per_acre_scen3,
+    chg_unit_per_acre_scen4 = unit2050_per_acre_scen4 - unit2020_per_acre_scen4
   )
 
 msf <- muni_sf(2020) |> 
@@ -2726,8 +2836,35 @@ st_write(msf, dsn = task4_gdb, layer = 'Task_4_Scenario_Comparisons_muni', appen
 cmt.tab <- msf |> 
   st_drop_geometry() |> 
   setDT() |> 
-  _[,lapply(.SD,sum),.(cmsbt08),.SDcols=(cs)]
-fwrite(cmt.tab, paste0(scen_path,'/scenario_comparisons_community_subtype.csv'))
+  _[,lapply(.SD,sum),.(cmsbt08),.SDcols=(cs)] |> 
+  mutate(
+    hh2020_per_acre_scen1 = scen1_total_households_2020 / developable_acres,
+    hh2020_per_acre_scen2 = scen2_total_households_2020 / developable_acres,
+    hh2020_per_acre_scen3 = scen3_total_households_2020 / developable_acres,
+    hh2020_per_acre_scen4 = scen4_total_households_2020 / developable_acres,
+    hh2050_per_acre_scen1 = scen1_total_households_2050 / developable_acres,
+    hh2050_per_acre_scen2 = scen2_total_households_2050 / developable_acres,
+    hh2050_per_acre_scen3 = scen3_total_households_2050 / developable_acres,
+    hh2050_per_acre_scen4 = scen4_total_households_2050 / developable_acres,
+    chg_hh_per_acre_scen1 = hh2050_per_acre_scen1 - hh2020_per_acre_scen1,
+    chg_hh_per_acre_scen2 = hh2050_per_acre_scen2 - hh2020_per_acre_scen2,
+    chg_hh_per_acre_scen3 = hh2050_per_acre_scen3 - hh2020_per_acre_scen3,
+    chg_hh_per_acre_scen4 = hh2050_per_acre_scen4 - hh2020_per_acre_scen4,
+    unit2020_per_acre_scen1 = scen1_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen2 = scen2_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen3 = scen3_total_residential_units_2020 / developable_acres,
+    unit2020_per_acre_scen4 = scen4_total_residential_units_2020 / developable_acres,
+    unit2050_per_acre_scen1 = scen1_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen2 = scen2_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen3 = scen3_total_residential_units_2050 / developable_acres,
+    unit2050_per_acre_scen4 = scen4_total_residential_units_2050 / developable_acres,
+    chg_unit_per_acre_scen1 = unit2050_per_acre_scen1 - unit2020_per_acre_scen1,
+    chg_unit_per_acre_scen2 = unit2050_per_acre_scen2 - unit2020_per_acre_scen2,
+    chg_unit_per_acre_scen3 = unit2050_per_acre_scen3 - unit2020_per_acre_scen3,
+    chg_unit_per_acre_scen4 = unit2050_per_acre_scen4 - unit2020_per_acre_scen4
+  )
+
+fwrite(cmt.tab, paste0(data_path,'/Task_4/Scenario_comparisons_community_subtype.csv'))
 
 ```
 
