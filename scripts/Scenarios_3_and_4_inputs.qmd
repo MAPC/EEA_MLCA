@@ -1,5 +1,5 @@
 ---
-title: "Scenarios 3 and 4 Inputs"
+title: "EEA Task 4 - Scenarios 3 and 4 Inputs"
 author: "Conor Gately"
 format: html
 editor: source
@@ -121,7 +121,6 @@ tod.sf <- st_to_sf(tod.tab)
 st_write(tod.sf, dsn = scen4_gdb, layer = 'TOD_100dua_zones', append=F)
 
 ```
-
 
 # 3 - Development Pipeline Adjustments
 
@@ -299,20 +298,7 @@ st_write(com.sim.sf, dsn=scen3_gdb, layer = 'Scenario_3_4_simulated_commercial_d
 
 ```
 
-# 4 - Temp Zoning Adjustments Scen 4
-
-```{r}
-
-e4 <- st_read(dsn = scen4_gdb, layer = 'EEA_Scenario_4_conservation_TOD_erase')
-tod <- st_read(dsn = scen4_gdb, layer = 'TOD_100dua_zones')
-cons <- st_read(dsn = scen4_gdb, layer = 'Scenario_3_and_4_conservation2050')
-
-s4.comp <- rbind(e4, tod, cons)
-st_write(s4.comp,dsn=scen4_gdb,layer='EEA_Scenario_4_merged_with_gaps')
-
-```
-
-# 5 - Convert Zoning Spatial Layer into Block-level constraints for UrbanCanvas
+# 4 - Convert Zoning Spatial Layer into Block-level constraints for UrbanCanvas
 
 ```{r}
 

@@ -1,8 +1,8 @@
 ---
-title: "Zoning Constraint Adjustment"
+title: "EEA Task 4 - Scenario 1 and 2 inputs"
 author: "Conor Gately"
 format: html
-editor: source
+editor: visual
 ---
 
 # 1 - Setup: paths and parameters
@@ -94,8 +94,6 @@ surf2poly = function(obj) {
 ```
 
 # 2 - Adjust parcels in sewer service areas to have one additional unit per lot (1-3 unit lots only)
-
-# Arcpy
 
 ```{python}
 
@@ -313,7 +311,6 @@ To do this, we randomly sampled the qualifying large parcels, calculating the cu
 
 The selected parcels were then rezoned according to a 6-story height limit by-right, while the remaining large parcels were rezoned at the 4-story height limit by-right.
 
-# Arcpy
 
 ```{python}
 
@@ -536,7 +533,7 @@ arcpy.management.Merge(
 
 ```
 
-# R processing
+# 3b - R processing
 
 ```{r}
 
@@ -638,7 +635,7 @@ st_write(poly50,
 
 # 5 - Erase and Merge all constraint layers
 
-# Arcpy
+
 
 ```{python}
 
@@ -649,16 +646,6 @@ from arcpy import env
 env.workspace = r.project_gdb
 env.overwriteOutput = True
 
-# 
-# arcpy.analysis.PairwiseDissolve(
-#     in_features="Cambridge_C1_updated_dua",
-#     out_feature_class="Cambridge_C1_updated_dua_dissolve",
-#     dissolve_field="max_dua;max_far;zoning",
-#     statistics_fields=None,
-#     multi_part="MULTI_PART",
-#     concatenation_separator=""
-# )
-
 
 arcpy.analysis.PairwiseClip(
     in_features="statewide_zoning_3A_update_20260323",
@@ -667,64 +654,7 @@ arcpy.analysis.PairwiseClip(
     cluster_tolerance=None,
     precision="DEFAULT_PRECISION"
 )
-```
 
-# R
-
-```{r}
-
-adu <- st_read(dsn=project_gdb,
-               layer="ADU_adjusted_dua_dissolve") %>%
-  st_set_precision(1000000)
-
-adu <- lwgeom::lwgeom_make_valid(adu$Shape) %>%
-  st_buffer(., dist = 0)
-adu <- st_union(st_combine(adu))
-v.adu <- vect(adu)
-saveRDS(v.adu,paste0(sp_path,'adu_vect.rds'))
-
-camb <- st_read(dsn=project_gdb,
-               layer="Cambridge_C1_updated_dua_dissolve") %>%
-  st_set_precision(1000000)
-camb <- lwgeom::lwgeom_make_valid(camb$SHAPE) %>%
-  st_buffer(., dist = 0)
-camb <- st_union(st_combine(camb))
-v.camb <- vect(camb)
-saveRDS(v.camb,paste0(sp_path,'camb_vect.rds'))
-
-# In terra spatvector
-adu.erase <- erase(v.adu, v.camb)
-
-# In sf
-st_erase_big = function(x, y){
-  x$ref <- 1:nrow(x)
-  x_inter = x[apply(st_intersects(x,y), 1, any),] #x in y
-  y_inter = y[apply(st_intersects(y,x), 1, any),] #y in x
-  difference <- st_difference(x_inter, st_union(y_inter)) #x_inter not in y_inter
-  nointer_x = x[!x$ref %in% x_inter$ref,] # x not intersecting
-  dplyr::bind_rows(difference,nointer_x)
-} 
-
-sf.adu.erase <- st_erase_big(adu.sf, camb.sf)
-
-
-swm <- st_read(dsn=project_gdb,
-               layer="statewide_zoning_3A_update_20260323")%>%
-  st_set_precision(1000000)%>%
-  st_buffer(., dist = 0)
-v.swm <- vect(swm)
-saveRDS(v.swm,paste0(sp_path,'swm_vect.rds'))
-
-
-swm.adu.camb.erase <- erase(swm, adu.erase)
-
-exp <- st_as_sf(swm.adu.camb.erase)
-st_write(exp, "C:/Users/cgate/Desktop/statewide_zoning_erase_ROW_ADU_Cambridge.gpkg", append=F)
-
-
-```
-
-```{python}
 arcpy.analysis.PairwiseErase(
     in_features="statewide_zoning_3A_update_20260323_dissolve",
     erase_features="ADU_adjusted_dua_dissolve",

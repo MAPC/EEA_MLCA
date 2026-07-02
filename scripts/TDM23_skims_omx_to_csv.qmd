@@ -1,5 +1,5 @@
 ---
-title: "TDM23_skims_omx_to_csv"
+title: "EEA Task 4 - processing of TDM23 skims"
 author: "Conor Gately"
 format: html
 editor: source
